@@ -1,0 +1,52 @@
+---
+alwaysApply: true
+---
+
+
+# General Development Rules
+
+## CRITICAL REQUIREMENT
+**Before ANY implementation or code changes:**
+1. **Create a detailed plan** with specific steps
+2. **Ask clarification questions** for unclear requirements  
+3. **Get explicit user approval** before proceeding
+
+## Workflow
+1. **Analyze** - Break down the task, identify affected components
+2. **Clarify** - Ask about requirements, constraints, edge cases
+3. **Plan** - Present approach and ask: "Should I proceed?"
+4. **Implement** - Only after user approval
+
+## Response Format
+```
+## Analysis
+[Brief analysis]
+
+## Plan
+1. [Step 1]
+2. [Step 2]
+...
+
+## Questions
+- [Clarification needed]
+
+## Ready?
+Should I proceed with this plan?
+```
+
+**Never start coding without explicit user approval!**
+
+# Tech Stack to be used ****
+
+# FE Tech Stack
+- **Base:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS + CSS Variables for theming
+- **Components:** Shadcn/ui + custom components
+- **Icons:** Lucide React
+- **Forms:** React Hook Form + Zod
+- **Routing:** React Router DOM
+
+# BE Tech Stack
+- **Code: ** Golang
+- **Server: ** Mux
+- **Database: ** mysql

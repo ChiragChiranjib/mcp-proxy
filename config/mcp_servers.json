@@ -1,0 +1,4 @@
+[
+  {"name": "example-mcp", "url": "http://localhost:9000/mcp", "description": "Example MCP server"},
+  {"name": "go-sdk-hello", "url": "http://localhost:9001/mcp", "description": "go-sdk hello example"}
+]

@@ -1,0 +1,22 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - gofmt
+    - goimports
+    - ineffassign
+    - gosimple
+    - unused
+    - revive
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/ChiragChiranjib/mcp-proxy
+
+issues:
+  exclude-use-default: false

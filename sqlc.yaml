@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "mysql"
+    queries: "internal/mcp/repo/queries"
+    schema: "migrations"
+    gen:
+      go:
+        package: "db"
+        out: "internal/mcp/repo/db"
+        sql_package: "database/sql"
+        overrides:
+          - db_type: "json"
+            go_type: "encoding/json.RawMessage"
