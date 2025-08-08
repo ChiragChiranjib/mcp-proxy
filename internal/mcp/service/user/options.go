@@ -1,20 +1,21 @@
 package user
 
 import (
-	"database/sql"
 	"log/slog"
+
+	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/repo"
 )
 
-type Option interface{ apply(*Service) }
-type withLogger struct{ l *slog.Logger }
+type Option func(*Service)
 
-func (o withLogger) apply(s *Service)  { s.logger = o.l }
-func WithLogger(l *slog.Logger) Option { return withLogger{l} }
+func WithLogger(l *slog.Logger) Option { return func(s *Service) { s.logger = l } }
 
-func NewService(db *sql.DB, opts ...Option) *Service {
-	s := &Service{db: db}
+func WithRepo(r *repo.Repo) Option { return func(s *Service) { s.repo = r } }
+
+func NewService(opts ...Option) *Service {
+	s := &Service{}
 	for _, o := range opts {
-		o.apply(s)
+		o(s)
 	}
 	return s
 }

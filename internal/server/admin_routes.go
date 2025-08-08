@@ -195,7 +195,16 @@ func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+		// Immediately refresh tools for this hub server for the current user
+		userID := GetUserID(r)
+		if userID != "" {
+			if _, err := appsvc.RefreshHubTools(r.Context(), deps.Hubs, deps.Tools, id, userID); err != nil {
+				// Return 201 with a warning; tools can still be refreshed manually later
+				WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "warning": "hub added but tool refresh failed"})
+				return
+			}
+		}
+		WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "ok": true})
 	}).Methods(http.MethodPost)
 
 	r.HandleFunc(cfg.AdminPrefix+"/hub/servers/{id}", func(w http.ResponseWriter, r *http.Request) {

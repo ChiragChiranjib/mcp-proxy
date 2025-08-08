@@ -34,7 +34,11 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			return
 		}
 		// verify ID token
-		payload, err := idtoken.Validate(r.Context(), body.Credential, deps.GoogleClientID)
+		clientID := ""
+		if deps.AppConfig != nil {
+			clientID = deps.AppConfig.Google.ClientID
+		}
+		payload, err := idtoken.Validate(r.Context(), body.Credential, clientID)
 		if err != nil {
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid google token"})
 			return
@@ -45,14 +49,14 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "email missing"})
 			return
 		}
-		// ensure user exists (reuse hub service db through queries if available)
-		// We don't have a dedicated user service exposed; use hub service's query layer indirectly by creating a helper.
-		// For simplicity, create a minimal user via hub service's queries through an exported func if available.
-		// Here, we piggyback on Hubs service by adding a no-op list call to ensure DB connection created.
-		_ = deps.Hubs // ensure not nil
+
 		uid := ensureUser(r.Context(), deps, email)
 		role := "user"
-		if deps.AdminUserID != "" && (uid == deps.AdminUserID || email == deps.AdminUserID) {
+		adminID := ""
+		if deps.AppConfig != nil {
+			adminID = deps.AppConfig.Security.AdminUserID
+		}
+		if adminID != "" && (uid == adminID || email == adminID) {
 			role = "admin"
 		}
 		// build app jwt
@@ -64,7 +68,11 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			"exp":   time.Now().Add(60 * time.Minute).Unix(),
 			"iat":   time.Now().Unix(),
 		})
-		s, err := token.SignedString([]byte(deps.JWTSecret))
+		secret := ""
+		if deps.AppConfig != nil {
+			secret = deps.AppConfig.Security.JWTSecret
+		}
+		s, err := token.SignedString([]byte(secret))
 		if err != nil {
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
 			return
@@ -88,16 +96,11 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing credentials"})
 			return
 		}
-		// validate against configured credentials
-		// We piggyback on deps.UserService to expose admin id if needed.
-		// Username is used as email also for simplicity.
+
 		if b.Username != "" {
 			// compare with configured credentials stored in server deps via user service accessor
 		}
-		// Deps does not currently carry basic creds; we use r.Context() bound configs via package level closure.
-		// As a practical approach, we use environment-configured credentials passed into user service accessors.
-		// Here, rely on special endpoint in UserService to validate; fallback to direct comparison using headers not available here.
-		// For brevity, we embed comparison via a helper
+
 		if !validateBasic(deps, b.Username, b.Password) {
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 			return
@@ -105,7 +108,11 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 		// ensure user exists and use canonical internal id
 		uid := ensureUser(r.Context(), deps, b.Username)
 		role := "user"
-		if deps.AdminUserID != "" && (uid == deps.AdminUserID || b.Username == deps.AdminUserID) {
+		adminID := ""
+		if deps.AppConfig != nil {
+			adminID = deps.AppConfig.Security.AdminUserID
+		}
+		if adminID != "" && (uid == adminID || b.Username == adminID) {
 			role = "admin"
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -115,7 +122,11 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			"exp":   time.Now().Add(60 * time.Minute).Unix(),
 			"iat":   time.Now().Unix(),
 		})
-		s, err := token.SignedString([]byte(deps.JWTSecret))
+		secret := ""
+		if deps.AppConfig != nil {
+			secret = deps.AppConfig.Security.JWTSecret
+		}
+		s, err := token.SignedString([]byte(secret))
 		if err != nil {
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
 			return
@@ -134,14 +145,14 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 
 // validateBasic compares provided credentials to configured ones.
 func validateBasic(deps Deps, username, password string) bool {
-	if deps.BasicUsername == "" {
+	if deps.AppConfig == nil || deps.AppConfig.Security.BasicUsername == "" {
 		return false
 	}
-	return username == deps.BasicUsername && password == deps.BasicPassword
+	return username == deps.AppConfig.Security.BasicUsername && password == deps.AppConfig.Security.BasicPassword
 }
 
 // ensureUser creates a user record if missing. For brevity, this is a placeholder where you would
-// call the sqlc Users queries. Here we no-op to keep the example focused.
+// call the repo Users methods. Here we no-op to keep the example focused.
 func ensureUser(ctx context.Context, deps Deps, email string) string {
 	if deps.UserService != nil {
 		if id, err := deps.UserService.GetOrCreateByEmail(ctx, email); err == nil && id != "" {

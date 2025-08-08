@@ -6,8 +6,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-
+	mcpclient "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/client"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/types"
@@ -22,32 +21,20 @@ func RefreshHubTools(ctx context.Context, hubs *mcphub.Service, tools *tool.Serv
 		return 0, err
 	}
 
-	// Build client transport (auth headers handled in proxy path later if needed)
-	transport := sdk.NewStreamableClientTransport(info.ServerURL, nil)
-	client := sdk.NewClient(&sdk.Implementation{Name: "mcp-proxy-refresh", Version: "0.1.0"}, nil)
-	cs, err := client.Connect(ctx, transport)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = cs.Close() }()
-
-	// List tools from upstream
-	res, err := cs.ListTools(ctx, &sdk.ListToolsParams{})
+	// List tools from upstream via client helper
+	res, err := mcpclient.ListTools(ctx, info.ServerURL)
 	if err != nil {
 		return 0, err
 	}
 
 	count := 0
 	// Build a set of existing modified names for dedupe
-	existing, _ := tools.ListActiveForHub(ctx, hubID)
-	used := make(map[string]struct{}, len(existing))
-	for _, t := range existing {
-		used[t.ModifiedName] = struct{}{}
-	}
+	// We no longer need to prefetch existing tools for naming; we insert blindly.
+	used := make(map[string]struct{})
 
 	for _, t := range res.Tools {
-		// Dedupe naming strategy: use original name and suffix when necessary
-		base := t.Name
+		// Preferred naming: <server-name>-<tool-name> (normalized) and if duplicate in this run, suffix
+		base := info.ServerName + "-" + t.Name
 		modified := base
 		i := 2
 		for {

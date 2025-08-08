@@ -1,4 +1,4 @@
-.PHONY: run tidy build lint migrate migrate-run seed-servers
+.PHONY: run tidy build lint migrate migrate-run seed-servers migrate-up migrate-down migrate-status migrate-create seed
 
 run:
 	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/mcp-gateway
@@ -9,15 +9,22 @@ tidy:
 build:
 	GOOS=darwin GOARCH=amd64 go build -o bin/mcp-gateway ./cmd/mcp-gateway
 
+build-migrate:
+	go build -o bin/migrate ./cmd/migrate
+
 lint:
 	golangci-lint run ./...
 
-migrate:
-	go build -o bin/migrate ./cmd/migrate
+# Goose helpers
+migrate-up:
+	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/migrate -dir migrations up
 
-migrate-run:
-	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/migrate
+migrate-down:
+	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/migrate -dir migrations down
+
+migrate-status:
+	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/migrate -dir migrations status
 
 # Seed catalog mcp_servers from config/mcp_servers.json and exit
-seed-servers:
-	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/mcp-gateway --seed-mcp-servers
+seed:
+	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/seed -file config/mcp_servers.json

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	cfgpkg "github.com/ChiragChiranjib/mcp-proxy/internal/config"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
@@ -23,20 +24,15 @@ type Server struct {
 
 // Deps enumerates dependencies required to assemble the server.
 type Deps struct {
-	Logger         *slog.Logger
-	Tools          *tool.Service
-	Hubs           *mcphub.Service
-	Virtual        *virtualmcp.Service
-	Catalog        *catalog.Service
-	Encrypter      *encryptor.AESEncrypter
-	GoogleClientID string
-	JWTSecret      string
-	UserService    *usersvc.Service
-	// Optional Basic auth
-	BasicUsername string
-	BasicPassword string
-	// Admin user id to assign admin role
-	AdminUserID string
+	Logger      *slog.Logger
+	Tools       *tool.Service
+	Hubs        *mcphub.Service
+	Virtual     *virtualmcp.Service
+	Catalog     *catalog.Service
+	Encrypter   *encryptor.AESEncrypter
+	UserService *usersvc.Service
+	// Full app config for auth and other settings
+	AppConfig *cfgpkg.Config
 }
 
 // Config holds HTTP wiring configuration.
@@ -57,8 +53,24 @@ func DefaultConfig() Config {
 	}
 }
 
-// New builds a Server with the given dependencies and configuration.
-func New(deps Deps, cfg Config) *Server {
+// Option configures dependencies for the server.
+type Option func(*Deps)
+
+func WithLogger(l *slog.Logger) Option               { return func(d *Deps) { d.Logger = l } }
+func WithTools(s *tool.Service) Option               { return func(d *Deps) { d.Tools = s } }
+func WithHubs(s *mcphub.Service) Option              { return func(d *Deps) { d.Hubs = s } }
+func WithVirtual(s *virtualmcp.Service) Option       { return func(d *Deps) { d.Virtual = s } }
+func WithCatalog(s *catalog.Service) Option          { return func(d *Deps) { d.Catalog = s } }
+func WithUserService(s *usersvc.Service) Option      { return func(d *Deps) { d.UserService = s } }
+func WithEncrypter(e *encryptor.AESEncrypter) Option { return func(d *Deps) { d.Encrypter = e } }
+func WithAppConfig(c *cfgpkg.Config) Option          { return func(d *Deps) { d.AppConfig = c } }
+
+// New builds a Server with the given configuration and dependency options.
+func New(cfg Config, opts ...Option) *Server {
+	var deps Deps
+	for _, o := range opts {
+		o(&deps)
+	}
 	r := cfg.Router
 	if r == nil {
 		r = mux.NewRouter()
@@ -67,12 +79,18 @@ func New(deps Deps, cfg Config) *Server {
 	r.Use(middlewares.Recover(deps.Logger))
 
 	// Optional Basic Auth: if Authorization header present, validate and set context
-	if deps.BasicUsername != "" {
-		r.Use(middlewares.BasicAuth(deps.BasicUsername, deps.BasicPassword, deps.AdminUserID))
+	if deps.AppConfig != nil && deps.AppConfig.Security.AESKey != "" { /* noop to avoid unused */
+	}
+	if deps.AppConfig != nil && deps.AppConfig.Security.BasicUsername != "" {
+		r.Use(middlewares.BasicAuth(
+			deps.AppConfig.Security.BasicUsername,
+			deps.AppConfig.Security.BasicPassword,
+			deps.AppConfig.Security.AdminUserID,
+		))
 	}
 
-	if deps.JWTSecret != "" {
-		r.Use(middlewares.Auth(deps.JWTSecret))
+	if deps.AppConfig != nil && deps.AppConfig.Security.JWTSecret != "" {
+		r.Use(middlewares.Auth(deps.AppConfig.Security.JWTSecret))
 	}
 
 	for _, m := range cfg.Middlewares {

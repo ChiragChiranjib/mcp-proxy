@@ -4,22 +4,18 @@ package tool
 import (
 	"log/slog"
 	"time"
+
+	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/repo"
 )
 
-// Option configures the tool Service.
-// Option configures the Tool service.
-type Option interface{ apply(*Service) }
-
-type loggerOption struct{ l *slog.Logger }
-
-func (o loggerOption) apply(s *Service) { s.logger = o.l }
-
-type timeoutOption struct{ d time.Duration }
-
-func (o timeoutOption) apply(s *Service) { s.timeout = o.d }
+// Option configures the Tool service (functional options).
+type Option func(*Service)
 
 // WithLogger sets a logger.
-func WithLogger(l *slog.Logger) Option { return loggerOption{l: l} }
+func WithLogger(l *slog.Logger) Option { return func(s *Service) { s.logger = l } }
 
 // WithTimeout sets a per-call timeout.
-func WithTimeout(d time.Duration) Option { return timeoutOption{d: d} }
+func WithTimeout(d time.Duration) Option { return func(s *Service) { s.timeout = d } }
+
+// WithRepo injects the GORM repo
+func WithRepo(r *repo.Repo) Option { return func(s *Service) { s.repo = r } }
