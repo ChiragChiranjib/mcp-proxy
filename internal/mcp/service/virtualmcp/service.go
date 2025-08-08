@@ -8,7 +8,6 @@ import (
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/idgen"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/repo"
-	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/types"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 )
 
@@ -36,25 +35,17 @@ func (s *Service) withTimeout(ctx context.Context) (context.Context, context.Can
 }
 
 // GetTools returns tools attached to a virtual server.
-func (s *Service) GetTools(ctx context.Context, vsID string) ([]types.Tool, error) {
+func (s *Service) GetTools(
+	ctx context.Context,
+	vsID string,
+) ([]m.MCPTool, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
-	// reuse Tool service ListForVirtualServer if needed, but for now query via GORM
-	var tools []m.MCPTool
-	err := s.repo.WithContext(ctx).
-		Table("mcp_tools").
-		Joins("JOIN tools_virtual_servers tvs ON tvs.tool_id = mcp_tools.id").
-		Where("tvs.mcp_virtual_server_id = ?", vsID).
-		Find(&tools).Error
+	tools, err := s.repo.ListToolsForVirtualServer(ctx, vsID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]types.Tool, 0, len(tools))
-	for _, r := range tools {
-		out = append(out, types.Tool{ID: r.ID, UserID: r.UserID, OriginalName: r.OriginalName, ModifiedName: r.ModifiedName,
-			HubServerID: r.MCPHubServerID, InputSchema: r.InputSchema, Annotations: r.Annotations, Status: r.Status})
-	}
-	return out, nil
+	return tools, nil
 }
 
 // Create creates a new virtual server for a user.
@@ -62,25 +53,28 @@ func (s *Service) Create(ctx context.Context, userID string) (string, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	id := "vs_" + idgen.NewID()
-	if err := s.repo.CreateVirtualServer(ctx, m.MCPVirtualServer{ID: id, UserID: userID, Status: "ACTIVE"}); err != nil {
+	if err := s.repo.CreateVirtualServer(ctx, m.MCPVirtualServer{
+		ID:     id,
+		UserID: userID,
+		Status: m.StatusActive,
+	}); err != nil {
 		return "", err
 	}
 	return id, nil
 }
 
 // ListForUser lists virtual servers for a user.
-func (s *Service) ListForUser(ctx context.Context, userID string) ([]types.VirtualServer, error) {
+func (s *Service) ListForUser(
+	ctx context.Context,
+	userID string,
+) ([]m.MCPVirtualServer, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	rows, err := s.repo.ListVirtualServersForUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]types.VirtualServer, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, types.VirtualServer{ID: r.ID, UserID: r.UserID, Status: r.Status})
-	}
-	return out, nil
+	return rows, nil
 }
 
 // SetStatus updates virtual server status.
@@ -91,7 +85,11 @@ func (s *Service) SetStatus(ctx context.Context, id string, status string) error
 }
 
 // ReplaceTools replaces tool set for a virtual server (capped at 50).
-func (s *Service) ReplaceTools(ctx context.Context, vsID string, toolIDs []string) error {
+func (s *Service) ReplaceTools(
+	ctx context.Context,
+	vsID string,
+	toolIDs []string,
+) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	if err := s.repo.ReplaceVirtualServerTools(ctx, vsID); err != nil {

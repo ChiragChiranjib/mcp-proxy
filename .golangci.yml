@@ -13,10 +13,16 @@ linters:
     - gosimple
     - unused
     - revive
+    - lll
 
 linters-settings:
   goimports:
     local-prefixes: github.com/ChiragChiranjib/mcp-proxy
+  lll:
+    line-length: 80
+    tab-width: 1
+    # ignore long lines that are comments or imports (often URLs)
+    exclude-pattern: '^(\s*//|import\s*\()'
 
 issues:
   exclude-use-default: false

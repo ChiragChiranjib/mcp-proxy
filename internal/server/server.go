@@ -11,6 +11,7 @@ import (
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
+	orchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
 	usersvc "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/user"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/virtualmcp"
@@ -24,13 +25,14 @@ type Server struct {
 
 // Deps enumerates dependencies required to assemble the server.
 type Deps struct {
-	Logger      *slog.Logger
-	Tools       *tool.Service
-	Hubs        *mcphub.Service
-	Virtual     *virtualmcp.Service
-	Catalog     *catalog.Service
-	Encrypter   *encryptor.AESEncrypter
-	UserService *usersvc.Service
+	Logger       *slog.Logger
+	Tools        *tool.Service
+	Hubs         *mcphub.Service
+	Virtual      *virtualmcp.Service
+	Catalog      *catalog.Service
+	Encrypter    *encryptor.AESEncrypter
+	UserService  *usersvc.Service
+	Orchestrator *orchestrator.Orchestrator
 	// Full app config for auth and other settings
 	AppConfig *cfgpkg.Config
 }
@@ -64,6 +66,9 @@ func WithCatalog(s *catalog.Service) Option          { return func(d *Deps) { d.
 func WithUserService(s *usersvc.Service) Option      { return func(d *Deps) { d.UserService = s } }
 func WithEncrypter(e *encryptor.AESEncrypter) Option { return func(d *Deps) { d.Encrypter = e } }
 func WithAppConfig(c *cfgpkg.Config) Option          { return func(d *Deps) { d.AppConfig = c } }
+func WithOrchestrator(o *orchestrator.Orchestrator) Option {
+	return func(d *Deps) { d.Orchestrator = o }
+}
 
 // New builds a Server with the given configuration and dependency options.
 func New(cfg Config, opts ...Option) *Server {

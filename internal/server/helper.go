@@ -34,3 +34,13 @@ func GetUserID(r *http.Request) string {
 	}
 	return ""
 }
+
+// GetUserRole returns the role string from context if present.
+func GetUserRole(r *http.Request) string {
+	if v := r.Context().Value(ck.UserRoleKey); v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
+}

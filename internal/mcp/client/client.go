@@ -34,3 +34,14 @@ func CallTool(ctx context.Context, url string, toolName string, args map[string]
 	defer func() { _ = cs.Close() }()
 	return cs.CallTool(ctx, &sdk.CallToolParams{Name: toolName, Arguments: args})
 }
+
+// InitCapabilities initializes the connection and returns raw capabilities JSON if available.
+// For now, return an empty JSON object as a placeholder; extend when SDK exposes capabilities.
+func InitCapabilities(ctx context.Context, url string) ([]byte, error) {
+	cs, err := ConnectStreamable(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cs.Close() }()
+	return []byte("{}"), nil
+}

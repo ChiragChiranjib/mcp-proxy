@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/repo"
-	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/types"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 )
 
@@ -44,16 +43,23 @@ func (s *Service) withTimeout(ctx context.Context) (context.Context, context.Can
 }
 
 // List returns all catalog servers ordered by name.
-func (s *Service) List(ctx context.Context) ([]types.CatalogServer, error) {
+func (s *Service) List(
+	ctx context.Context,
+) ([]m.MCPServer, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	var rows []m.MCPServer
-	if err := s.repo.WithContext(ctx).Order("name").Find(&rows).Error; err != nil {
+	if err := s.repo.WithContext(ctx).
+		Order("name").
+		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	out := make([]types.CatalogServer, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, types.CatalogServer{ID: r.ID, Name: r.Name, URL: r.URL, Description: r.Description})
-	}
-	return out, nil
+	return rows, nil
+}
+
+// Add creates or updates a catalog server keyed by name.
+func (s *Service) Add(ctx context.Context, srv m.MCPServer) error {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.WithContext(ctx).Create(&srv).Error
 }

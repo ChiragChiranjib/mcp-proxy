@@ -14,22 +14,47 @@ import (
 func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 	// get current session info (if any)
 	r.HandleFunc(cfg.AdminPrefix+"/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_ME_INIT",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"user_id", GetUserID(r),
+			)
+		}
 		uid := GetUserID(r)
 		if uid == "" {
+			if deps.Logger != nil {
+				deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
+			}
 			w.WriteHeader(http.StatusUnauthorized)
 			return
+		}
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_ME_OK", "user_id", uid)
 		}
 		WriteJSON(w, http.StatusOK, map[string]string{"user_id": uid})
 	}).Methods(http.MethodGet)
 	// exchange Google ID token for app session
 	r.HandleFunc(cfg.AdminPrefix+"/auth/google", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_GOOGLE_INIT",
+				"method", r.Method,
+				"path", r.URL.Path,
+			)
+		}
 		var body struct {
 			Credential string `json:"credential"`
 		}
 		if !ReadJSON(w, r, &body) {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_GOOGLE_READ_BODY_ERROR")
+			}
 			return
 		}
 		if body.Credential == "" {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_GOOGLE_MISSING_CREDENTIAL")
+			}
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing credential"})
 			return
 		}
@@ -40,12 +65,18 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 		}
 		payload, err := idtoken.Validate(r.Context(), body.Credential, clientID)
 		if err != nil {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_GOOGLE_VALIDATE_ERROR", "error", err)
+			}
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid google token"})
 			return
 		}
 		email, _ := payload.Claims["email"].(string)
 		name, _ := payload.Claims["name"].(string)
 		if email == "" {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_GOOGLE_EMAIL_MISSING")
+			}
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "email missing"})
 			return
 		}
@@ -74,25 +105,43 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 		}
 		s, err := token.SignedString([]byte(secret))
 		if err != nil {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_GOOGLE_TOKEN_ERROR", "error", err)
+			}
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
 			return
 		}
 		// set cookie
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: s, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 3600})
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_GOOGLE_OK", "user_id", uid)
+		}
 		WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid, "email": email, "name": name})
 	}).Methods(http.MethodPost)
 
 	// username/password basic login → sets JWT session cookie
 	r.HandleFunc(cfg.AdminPrefix+"/auth/basic", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_BASIC_INIT",
+				"method", r.Method,
+				"path", r.URL.Path,
+			)
+		}
 		type req struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
 		var b req
 		if !ReadJSON(w, r, &b) {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_BASIC_READ_BODY_ERROR")
+			}
 			return
 		}
 		if b.Username == "" || b.Password == "" {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_BASIC_MISSING_CREDENTIALS")
+			}
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing credentials"})
 			return
 		}
@@ -102,6 +151,9 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 		}
 
 		if !validateBasic(deps, b.Username, b.Password) {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_BASIC_INVALID_CREDENTIALS")
+			}
 			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 			return
 		}
@@ -128,17 +180,29 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 		}
 		s, err := token.SignedString([]byte(secret))
 		if err != nil {
+			if deps.Logger != nil {
+				deps.Logger.Error("AUTH_BASIC_TOKEN_ERROR", "error", err)
+			}
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
 			return
 		}
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: s, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 3600})
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_BASIC_OK", "user_id", uid)
+		}
 		WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid, "email": uid})
 	}).Methods(http.MethodPost)
 
 	// logout
 	r.HandleFunc(cfg.AdminPrefix+"/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_LOGOUT_INIT", "user_id", GetUserID(r))
+		}
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 0})
 		w.WriteHeader(http.StatusNoContent)
+		if deps.Logger != nil {
+			deps.Logger.Info("AUTH_LOGOUT_OK")
+		}
 	}).Methods(http.MethodPost)
 
 }

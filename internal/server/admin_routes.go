@@ -1,253 +1,584 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/mux"
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/idgen"
-	appsvc "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service"
-	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/types"
+	orchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
+	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 )
 
 func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
-	// catalog list
-	r.HandleFunc(cfg.AdminPrefix+"/catalog/servers", func(w http.ResponseWriter, r *http.Request) {
-		items, err := deps.Catalog.List(r.Context())
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
-	}).Methods(http.MethodGet)
-	// list tools for a virtual server
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers/{id}/tools", func(w http.ResponseWriter, r *http.Request) {
-		vsID := mux.Vars(r)["id"]
-		items, err := deps.Tools.ListForVirtualServer(r.Context(), vsID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
-	}).Methods(http.MethodGet)
+	addCatalogRoutes(r, deps, cfg)
+	addToolsRoutes(r, deps, cfg)
+	addVirtualServerRoutes(r, deps, cfg)
+	addHubRoutes(r, deps, cfg)
+}
 
-	// list all tools for user with filters
-	r.HandleFunc(cfg.AdminPrefix+"/tools", func(w http.ResponseWriter, r *http.Request) {
-		userID := GetUserID(r)
-		hubID := r.URL.Query().Get("hub_server_id")
-		status := r.URL.Query().Get("status")
-		q := r.URL.Query().Get("q")
-		if deps.Tools != nil {
-			items, err := deps.Tools.ListForUserFiltered(r.Context(), userID, hubID, status, q)
+// Catalog routes
+func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
+	r.HandleFunc(
+		cfg.AdminPrefix+"/catalog/servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_CATALOG_SERVERS_INIT", "method", r.Method, "path", r.URL.Path)
+			}
+			items, err := deps.Catalog.List(r.Context())
 			if err != nil {
-				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				if deps.Logger != nil {
+					deps.Logger.Error("LIST_CATALOG_SERVERS_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
 				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_CATALOG_SERVERS_OK", "count", len(items))
 			}
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": []any{}})
-	}).Methods(http.MethodGet)
+		},
+	).Methods(http.MethodGet)
 
-	// change tool status
-	r.HandleFunc(cfg.AdminPrefix+"/tools/{id}/status", func(w http.ResponseWriter, r *http.Request) {
-		type reqBody struct {
-			Status string `json:"status"`
-		}
-		var body reqBody
-		if !ReadJSON(w, r, &body) {
-			return
-		}
-		if body.Status == "" {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing status"})
-			return
-		}
-		id := mux.Vars(r)["id"]
-		if err := deps.Tools.SetStatus(r.Context(), id, body.Status); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodPatch)
-
-	// delete (soft) a tool → mark as DEACTIVATED
-	r.HandleFunc(cfg.AdminPrefix+"/tools/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		id := mux.Vars(r)["id"]
-		if err := deps.Tools.SetStatus(r.Context(), id, string(types.StatusDeactivated)); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodDelete)
-
-	// create virtual server
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers", func(w http.ResponseWriter, r *http.Request) {
-		userID := GetUserID(r)
-		id, err := deps.Virtual.Create(r.Context(), userID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
-	}).Methods(http.MethodPost)
-
-	// list virtual servers for user
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers", func(w http.ResponseWriter, r *http.Request) {
-		userID := GetUserID(r)
-		items, err := deps.Virtual.ListForUser(r.Context(), userID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
-	}).Methods(http.MethodGet)
-
-	// replace virtual server tools
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers/{id}/tools", func(w http.ResponseWriter, r *http.Request) {
-		id := mux.Vars(r)["id"]
-		var body struct {
-			ToolIDs []string `json:"tool_ids"`
-		}
-		if !ReadJSON(w, r, &body) {
-			return
-		}
-		if err := deps.Virtual.ReplaceTools(r.Context(), id, body.ToolIDs); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodPut)
-
-	// set virtual server status
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers/{id}/status", func(w http.ResponseWriter, r *http.Request) {
-		id := mux.Vars(r)["id"]
-		var body struct {
-			Status string `json:"status"`
-		}
-		if !ReadJSON(w, r, &body) {
-			return
-		}
-		if body.Status == "" {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing status"})
-			return
-		}
-		if err := deps.Virtual.SetStatus(r.Context(), id, body.Status); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodPatch)
-
-	// delete virtual server
-	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := mux.Vars(r)["id"]
-		if err := deps.Virtual.Delete(r.Context(), id); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodDelete)
-
-	// hub servers list/add/delete/status
-	// list hub servers for current user
-	r.HandleFunc(cfg.AdminPrefix+"/hub/servers", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		userID := GetUserID(r)
-		items, err := deps.Hubs.ListForUser(r.Context(), userID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
-	}).Methods(http.MethodGet)
-
-	r.HandleFunc(cfg.AdminPrefix+"/hub/servers", func(w http.ResponseWriter, r *http.Request) {
-		type req struct {
-			MCPServerID  string          `json:"mcp_server_id"`
-			Transport    string          `json:"transport"`
-			Capabilities json.RawMessage `json:"capabilities"`
-			AuthType     string          `json:"auth_type"`
-			AuthValue    json.RawMessage `json:"auth_value"`
-		}
-		var b req
-		if !ReadJSON(w, r, &b) {
-			return
-		}
-		id := idgen.NewID()
-		if err := deps.Hubs.Add(r.Context(), types.HubServer{
-			ID:           id,
-			UserID:       GetUserID(r),
-			MCServerID:   b.MCPServerID,
-			Status:       "ACTIVE",
-			Transport:    b.Transport,
-			Capabilities: b.Capabilities,
-			AuthType:     b.AuthType,
-			AuthValue:    b.AuthValue,
-		}); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		// Immediately refresh tools for this hub server for the current user
-		userID := GetUserID(r)
-		if userID != "" {
-			if _, err := appsvc.RefreshHubTools(r.Context(), deps.Hubs, deps.Tools, id, userID); err != nil {
-				// Return 201 with a warning; tools can still be refreshed manually later
-				WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "warning": "hub added but tool refresh failed"})
+	// Add a new catalog server (ADMIN only)
+	r.HandleFunc(
+		cfg.AdminPrefix+"/catalog/servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			if GetUserRole(r) != string(m.RoleAdmin) {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_CATALOG_SERVER_FORBIDDEN")
+				}
+				WriteJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
 			}
-		}
-		WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "ok": true})
-	}).Methods(http.MethodPost)
-
-	r.HandleFunc(cfg.AdminPrefix+"/hub/servers/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := mux.Vars(r)["id"]
-		switch r.Method {
-		case http.MethodDelete:
-			if err := deps.Hubs.Delete(r.Context(), id); err != nil {
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_CATALOG_SERVER_INIT")
+			}
+			var body struct {
+				Name        string `json:"name"`
+				URL         string `json:"url"`
+				Description string `json:"description"`
+			}
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_CATALOG_SERVER_READ_BODY_ERROR")
+				}
+				return
+			}
+			if body.Name == "" || body.URL == "" {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_CATALOG_SERVER_MISSING_FIELDS")
+				}
+				WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing fields"})
+				return
+			}
+			rec := m.MCPServer{
+				ID:          idgen.NewID(),
+				Name:        body.Name,
+				URL:         body.URL,
+				Description: body.Description,
+			}
+			if err := deps.Catalog.Add(r.Context(), rec); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_CATALOG_SERVER_DB_ERROR", "error", err)
+				}
 				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 				return
 			}
-			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-		case http.MethodPatch:
-			type req struct {
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_CATALOG_SERVER_OK", "id", rec.ID)
+			}
+			WriteJSON(w, http.StatusCreated, map[string]string{"id": rec.ID})
+		},
+	).Methods(http.MethodPost)
+}
+
+// Tools routes
+func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
+	// List tools with filters
+	r.HandleFunc(
+		cfg.AdminPrefix+"/tools",
+		func(w http.ResponseWriter, r *http.Request) {
+			userID := GetUserID(r)
+			hubID := r.URL.Query().Get("hub_server_id")
+			status := r.URL.Query().Get("status")
+			q := r.URL.Query().Get("q")
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_TOOLS_INIT", "user_id", userID, "hub_server_id", hubID, "status", status, "q_len", len(q))
+			}
+			if deps.Tools != nil {
+				items, err := deps.Tools.ListForUserFiltered(
+					r.Context(), userID, hubID, status, q,
+				)
+				if err != nil {
+					if deps.Logger != nil {
+						deps.Logger.Error("LIST_TOOLS_ERROR", "error", err)
+					}
+					WriteJSON(
+						w,
+						http.StatusInternalServerError,
+						map[string]string{"error": err.Error()},
+					)
+					return
+				}
+				if deps.Logger != nil {
+					deps.Logger.Info("LIST_TOOLS_OK", "count", len(items))
+				}
+				WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+				return
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{"items": []any{}})
+		},
+	).Methods(http.MethodGet)
+
+	// Change tool status
+	r.HandleFunc(
+		cfg.AdminPrefix+"/tools/{id}/status",
+		func(w http.ResponseWriter, r *http.Request) {
+			type reqBody struct {
 				Status string `json:"status"`
 			}
-			var b req
-			if !ReadJSON(w, r, &b) {
+			var body reqBody
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_TOOL_STATUS_READ_BODY_ERROR")
+				}
 				return
 			}
-			if b.Status == "" {
-				WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing status"})
+			if body.Status == "" {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_TOOL_STATUS_MISSING_STATUS")
+				}
+				WriteJSON(
+					w,
+					http.StatusBadRequest,
+					map[string]string{"error": "missing status"},
+				)
 				return
 			}
-			if err := deps.Hubs.SetStatus(r.Context(), id, b.Status); err != nil {
-				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			id := mux.Vars(r)["id"]
+			if deps.Logger != nil {
+				deps.Logger.Info("UPDATE_TOOL_STATUS_INIT", "id", id, "status", body.Status)
+			}
+			if err := deps.Tools.SetStatus(
+				r.Context(), id, body.Status,
+			); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_TOOL_STATUS_DB_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
 				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("UPDATE_TOOL_STATUS_OK", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	}).Methods(http.MethodDelete, http.MethodPatch)
+		},
+	).Methods(http.MethodPatch)
 
-	// refresh tools from an upstream hub server
-	r.HandleFunc(cfg.AdminPrefix+"/hub/servers/{id}/refresh", func(w http.ResponseWriter, r *http.Request) {
-		id := mux.Vars(r)["id"]
-		userID := GetUserID(r)
-		ctx := r.Context()
-		// Run refresh with a bounded timeout
-		if _, err := appsvc.RefreshHubTools(ctx, deps.Hubs, deps.Tools, id, userID); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
-	}).Methods(http.MethodPost)
+	// Soft delete tool
+	r.HandleFunc(
+		cfg.AdminPrefix+"/tools/{id}",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			if deps.Logger != nil {
+				deps.Logger.Info("DELETE_TOOL_INIT", "id", id)
+			}
+			if err := deps.Tools.SetStatus(
+				r.Context(), id, "DEACTIVATED",
+			); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("DELETE_TOOL_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("DELETE_TOOL_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		},
+	).Methods(http.MethodDelete)
+}
+
+// Virtual server routes
+func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
+	// Create
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			userID := GetUserID(r)
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_VIRTUAL_SERVER_INIT", "user_id", userID)
+			}
+			id, err := deps.Virtual.Create(r.Context(), userID)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_VIRTUAL_SERVER_DB_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_VIRTUAL_SERVER_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+		},
+	).Methods(http.MethodPost)
+
+	// List for user
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			userID := GetUserID(r)
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_VIRTUAL_SERVERS_INIT", "user_id", userID)
+			}
+			items, err := deps.Virtual.ListForUser(r.Context(), userID)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("LIST_VIRTUAL_SERVERS_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_VIRTUAL_SERVERS_OK", "count", len(items))
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+		},
+	).Methods(http.MethodGet)
+
+	// Replace tools
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers/{id}/tools",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			var body struct {
+				ToolIDs []string `json:"tool_ids"`
+			}
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("REPLACE_VS_TOOLS_READ_BODY_ERROR")
+				}
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("REPLACE_VS_TOOLS_INIT", "id", id, "tool_ids_len", len(body.ToolIDs))
+			}
+			if err := deps.Virtual.ReplaceTools(
+				r.Context(), id, body.ToolIDs,
+			); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("REPLACE_VS_TOOLS_DB_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("REPLACE_VS_TOOLS_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		},
+	).Methods(http.MethodPut)
+
+	// List tools for a virtual server
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers/{id}/tools",
+		func(w http.ResponseWriter, r *http.Request) {
+			vsID := mux.Vars(r)["id"]
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_VS_TOOLS_INIT", "id", vsID)
+			}
+			items, err := deps.Tools.ListForVirtualServer(
+				r.Context(), vsID,
+			)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("LIST_VS_TOOLS_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_VS_TOOLS_OK", "count", len(items))
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+		},
+	).Methods(http.MethodGet)
+
+	// Set status
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers/{id}/status",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			var body struct {
+				Status string `json:"status"`
+			}
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_VS_STATUS_READ_BODY_ERROR")
+				}
+				return
+			}
+			if body.Status == "" {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_VS_STATUS_MISSING_STATUS")
+				}
+				WriteJSON(
+					w,
+					http.StatusBadRequest,
+					map[string]string{"error": "missing status"},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("UPDATE_VS_STATUS_INIT", "id", id, "status", body.Status)
+			}
+			if err := deps.Virtual.SetStatus(
+				r.Context(), id, body.Status,
+			); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_VS_STATUS_DB_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("UPDATE_VS_STATUS_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		},
+	).Methods(http.MethodPatch)
+
+	// Delete
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers/{id}",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			if deps.Logger != nil {
+				deps.Logger.Info("DELETE_VS_INIT", "id", id)
+			}
+			if err := deps.Virtual.Delete(r.Context(), id); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("DELETE_VS_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("DELETE_VS_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		},
+	).Methods(http.MethodDelete)
+}
+
+// Hub routes
+func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
+	orch := deps.Orchestrator
+	// List user's hubs
+	r.HandleFunc(
+		cfg.AdminPrefix+"/hub/servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_HUB_SERVERS_INIT", "user_id", GetUserID(r))
+			}
+			userID := GetUserID(r)
+			items, err := deps.Hubs.ListForUser(r.Context(), userID)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("LIST_HUB_SERVERS_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("LIST_HUB_SERVERS_OK", "count", len(items))
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+		},
+	).Methods(http.MethodGet)
+
+	// Add hub server via orchestrator
+	r.HandleFunc(
+		cfg.AdminPrefix+"/hub/servers",
+		func(w http.ResponseWriter, r *http.Request) {
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_HUB_SERVER_INIT")
+			}
+			var body orchestrator.CreateMCPHubServer
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_HUB_SERVER_READ_BODY_ERROR")
+				}
+				return
+			}
+			// Always trust server-side authenticated user
+			body.UserID = GetUserID(r)
+
+			id, err := orch.AddHub(r.Context(), body)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("CREATE_HUB_SERVER_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("CREATE_HUB_SERVER_OK", "id", id)
+			}
+			WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "ok": true})
+		},
+	).Methods(http.MethodPost)
+
+	// Update status / Delete hub
+	r.HandleFunc(
+		cfg.AdminPrefix+"/hub/servers/{id}",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			switch r.Method {
+			case http.MethodDelete:
+				if deps.Logger != nil {
+					deps.Logger.Info("DELETE_HUB_SERVER_INIT", "id", id)
+				}
+				if err := deps.Hubs.Delete(r.Context(), id); err != nil {
+					if deps.Logger != nil {
+						deps.Logger.Error("DELETE_HUB_SERVER_ERROR", "error", err)
+					}
+					WriteJSON(
+						w,
+						http.StatusInternalServerError,
+						map[string]string{"error": err.Error()},
+					)
+					return
+				}
+				if deps.Logger != nil {
+					deps.Logger.Info("DELETE_HUB_SERVER_OK", "id", id)
+				}
+				WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+			case http.MethodPatch:
+				type req struct {
+					Status string `json:"status"`
+				}
+				var b req
+				if !ReadJSON(w, r, &b) {
+					if deps.Logger != nil {
+						deps.Logger.Error("UPDATE_HUB_STATUS_READ_BODY_ERROR")
+					}
+					return
+				}
+				if b.Status == "" {
+					if deps.Logger != nil {
+						deps.Logger.Error("UPDATE_HUB_STATUS_MISSING_STATUS")
+					}
+					WriteJSON(
+						w,
+						http.StatusBadRequest,
+						map[string]string{"error": "missing status"},
+					)
+					return
+				}
+				if deps.Logger != nil {
+					deps.Logger.Info("UPDATE_HUB_STATUS_INIT", "id", id, "status", b.Status)
+				}
+				if err := deps.Hubs.SetStatus(
+					r.Context(), id, b.Status,
+				); err != nil {
+					if deps.Logger != nil {
+						deps.Logger.Error("UPDATE_HUB_STATUS_DB_ERROR", "error", err)
+					}
+					WriteJSON(
+						w,
+						http.StatusInternalServerError,
+						map[string]string{"error": err.Error()},
+					)
+					return
+				}
+				if deps.Logger != nil {
+					deps.Logger.Info("UPDATE_HUB_STATUS_OK", "id", id)
+				}
+				WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		},
+	).Methods(http.MethodDelete, http.MethodPatch)
+
+	// Refresh tools for a hub via orchestrator
+	r.HandleFunc(
+		cfg.AdminPrefix+"/hub/servers/{id}/refresh",
+		func(w http.ResponseWriter, r *http.Request) {
+			id := mux.Vars(r)["id"]
+			userID := GetUserID(r)
+			if deps.Logger != nil {
+				deps.Logger.Info("REFRESH_HUB_INIT", "id", id, "user_id", userID)
+			}
+
+			added, deleted, err := orch.RefreshHub(r.Context(), id, userID)
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("REFRESH_HUB_ERROR", "error", err)
+				}
+				WriteJSON(
+					w,
+					http.StatusInternalServerError,
+					map[string]string{"error": err.Error()},
+				)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("REFRESH_HUB_OK", "added", len(added), "deleted", len(deleted))
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{
+				"ok":      true,
+				"added":   added,
+				"deleted": deleted,
+			})
+		},
+	).Methods(http.MethodPost)
 }

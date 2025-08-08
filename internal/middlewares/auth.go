@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
+	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -72,9 +73,9 @@ func BasicAuth(expectedUsername, expectedPassword, adminUserID string) func(http
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			role := "user"
+			role := string(m.RoleUser)
 			if adminUserID != "" && username == adminUserID {
-				role = "admin"
+				role = string(m.RoleAdmin)
 			}
 			ctx := context.WithValue(r.Context(), ck.UserIDKey, username)
 			ctx = context.WithValue(ctx, ck.UserEmailKey, username)

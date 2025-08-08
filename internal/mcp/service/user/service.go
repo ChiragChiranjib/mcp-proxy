@@ -18,19 +18,15 @@ type Service struct {
 // GetOrCreateByEmail returns an existing user id for the given email (stored as username),
 // or creates a new user with role USER.
 func (s *Service) GetOrCreateByEmail(ctx context.Context, email string) (string, error) {
-	var u m.User
-	err := s.repo.WithContext(ctx).Where("username = ?", email).Take(&u).Error
-	if err == nil && u.ID != "" {
-		return u.ID, nil
+	if id, err := s.repo.FindUserIDByUsername(ctx, email); err == nil && id != "" {
+		return id, nil
 	}
 	// create
 	uid := idgen.NewID()
-	u = m.User{ID: uid, Username: email, Role: "USER"}
-	if err := s.repo.WithContext(ctx).Create(&u).Error; err != nil {
-		// race-safe reselect
-		var again m.User
-		if e2 := s.repo.WithContext(ctx).Where("username = ?", email).Take(&again).Error; e2 == nil && again.ID != "" {
-			return again.ID, nil
+	u := m.User{ID: uid, Username: email, Role: "USER"}
+	if err := s.repo.CreateUser(ctx, u); err != nil {
+		if id, err2 := s.repo.FindUserIDByUsername(ctx, email); err2 == nil && id != "" {
+			return id, nil
 		}
 		return "", err
 	}
