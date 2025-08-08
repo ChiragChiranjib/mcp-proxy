@@ -16,7 +16,18 @@ type ServerConfig struct {
 
 // SecurityConfig holds security-related settings.
 type SecurityConfig struct {
-	AESKey string `mapstructure:"aes_key"`
+	AESKey    string `mapstructure:"aes_key"`
+	JWTSecret string `mapstructure:"jwt_secret"`
+	// Optional basic auth credentials for admin login
+	BasicUsername string `mapstructure:"basic_username"`
+	BasicPassword string `mapstructure:"basic_password"`
+	// AdminUserID is the user id that should receive admin role in JWTs
+	AdminUserID string `mapstructure:"admin_user_id"`
+}
+
+// GoogleConfig holds Google Identity configuration.
+type GoogleConfig struct {
+	ClientID string `mapstructure:"client_id"`
 }
 
 // DatabaseConfig holds MySQL connection and pool settings.
@@ -40,6 +51,7 @@ type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	DB       DatabaseConfig `mapstructure:"database"`
 	Security SecurityConfig `mapstructure:"security"`
+	Google   GoogleConfig   `mapstructure:"google"`
 }
 
 // Load reads the TOML config for the current APP_ENV and MCP_MODE.

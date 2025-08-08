@@ -12,6 +12,15 @@ import (
 )
 
 func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
+	// catalog list
+	r.HandleFunc(cfg.AdminPrefix+"/catalog/servers", func(w http.ResponseWriter, r *http.Request) {
+		items, err := deps.Catalog.List(r.Context())
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	}).Methods(http.MethodGet)
 	// list tools for a virtual server
 	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers/{id}/tools", func(w http.ResponseWriter, r *http.Request) {
 		vsID := mux.Vars(r)["id"]
@@ -61,6 +70,20 @@ func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
 		}
 		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 	}).Methods(http.MethodPatch)
+
+	// delete (soft) a tool → mark as DEACTIVATED
+	r.HandleFunc(cfg.AdminPrefix+"/tools/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		id := mux.Vars(r)["id"]
+		if err := deps.Tools.SetStatus(r.Context(), id, string(types.StatusDeactivated)); err != nil {
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+	}).Methods(http.MethodDelete)
 
 	// create virtual server
 	r.HandleFunc(cfg.AdminPrefix+"/virtual-servers", func(w http.ResponseWriter, r *http.Request) {
@@ -130,10 +153,24 @@ func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
 		WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 	}).Methods(http.MethodDelete)
 
-	// hub servers add/delete/status
+	// hub servers list/add/delete/status
+	// list hub servers for current user
+	r.HandleFunc(cfg.AdminPrefix+"/hub/servers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		userID := GetUserID(r)
+		items, err := deps.Hubs.ListForUser(r.Context(), userID)
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	}).Methods(http.MethodGet)
+
 	r.HandleFunc(cfg.AdminPrefix+"/hub/servers", func(w http.ResponseWriter, r *http.Request) {
 		type req struct {
-			UserID       string          `json:"user_id"`
 			MCPServerID  string          `json:"mcp_server_id"`
 			Transport    string          `json:"transport"`
 			Capabilities json.RawMessage `json:"capabilities"`
@@ -147,7 +184,7 @@ func addAdminRoutes(r *mux.Router, deps Deps, cfg Config) {
 		id := idgen.NewID()
 		if err := deps.Hubs.Add(r.Context(), types.HubServer{
 			ID:           id,
-			UserID:       b.UserID,
+			UserID:       GetUserID(r),
 			MCServerID:   b.MCPServerID,
 			Status:       "ACTIVE",
 			Transport:    b.Transport,

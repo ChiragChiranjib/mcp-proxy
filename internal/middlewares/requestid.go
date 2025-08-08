@@ -6,12 +6,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+
+	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
 )
-
-type ctxKey string
-
-// RequestIDKey is the context key used to store the request ID.
-const RequestIDKey ctxKey = "request_id"
 
 // RequestID injects an X-Request-Id header and stores it in context for tracing.
 func RequestID() func(http.Handler) http.Handler {
@@ -22,7 +19,7 @@ func RequestID() func(http.Handler) http.Handler {
 				rid = newID()
 			}
 			w.Header().Set("X-Request-Id", rid)
-			ctx := context.WithValue(r.Context(), RequestIDKey, rid)
+			ctx := context.WithValue(r.Context(), ck.RequestIDKey, rid)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

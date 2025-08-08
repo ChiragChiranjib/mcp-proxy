@@ -64,3 +64,11 @@ type VirtualServer struct {
 	UserID string `json:"user_id"`
 	Status string `json:"status"`
 }
+
+// CatalogServer lists an available upstream MCP server entry.
+type CatalogServer struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Description string `json:"description"`
+}

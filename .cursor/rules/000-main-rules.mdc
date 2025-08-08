@@ -1,8 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
-
 # General Development Rules
 
 ## CRITICAL REQUIREMENT

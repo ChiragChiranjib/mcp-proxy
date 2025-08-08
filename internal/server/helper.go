@@ -3,7 +3,8 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
+
+	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
 )
 
 // WriteJSON ...
@@ -26,7 +27,10 @@ func ReadJSON[T any](w http.ResponseWriter, r *http.Request, dst *T) bool {
 
 // GetUserID ...
 func GetUserID(r *http.Request) string {
-	// Temporary: read from header
-	uid := r.Header.Get("X-User-ID")
-	return strings.TrimSpace(uid)
+	if v := r.Context().Value(ck.UserIDKey); v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
 }

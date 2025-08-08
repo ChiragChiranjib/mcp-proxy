@@ -20,8 +20,10 @@ import (
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	logpkg "github.com/ChiragChiranjib/mcp-proxy/internal/log"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/idgen"
+	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
+	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/user"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/virtualmcp"
 	mcpserver "github.com/ChiragChiranjib/mcp-proxy/internal/server"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/storage"
@@ -116,6 +118,8 @@ func main() {
 	toolSvc := tool.NewService(db, tool.WithLogger(logger))
 	hubSvc := mcphub.NewService(db, mcphub.WithLogger(logger))
 	virtualSvc := virtualmcp.NewService(db, virtualmcp.WithLogger(logger))
+	catalogSvc := catalog.NewService(db, catalog.WithLogger(logger))
+	userSvc := user.NewService(db, user.WithLogger(logger))
 	// Build AESEncrypter if key present
 	var encr *encryptor.AESEncrypter
 	if cfg.Security.AESKey != "" {
@@ -124,11 +128,18 @@ func main() {
 		}
 	}
 	server := mcpserver.New(mcpserver.Deps{
-		Logger:    logger,
-		Tools:     toolSvc,
-		Hubs:      hubSvc,
-		Virtual:   virtualSvc,
-		Encrypter: encr,
+		Logger:         logger,
+		Tools:          toolSvc,
+		Hubs:           hubSvc,
+		Virtual:        virtualSvc,
+		Catalog:        catalogSvc,
+		Encrypter:      encr,
+		GoogleClientID: cfg.Google.ClientID,
+		JWTSecret:      cfg.Security.JWTSecret,
+		UserService:    userSvc,
+		BasicUsername:  cfg.Security.BasicUsername,
+		BasicPassword:  cfg.Security.BasicPassword,
+		AdminUserID:    cfg.Security.AdminUserID,
 	}, mcpserver.DefaultConfig())
 
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.Server.Port), Handler: server.Handler}

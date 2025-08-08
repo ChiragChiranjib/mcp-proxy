@@ -5,10 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -27,8 +29,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	dsn := cfg.DB.DSN
+	if dsn == "" {
+		host := cfg.DB.Host
+		if host == "" {
+			host = "127.0.0.1"
+		}
+		port := cfg.DB.Port
+		if port == 0 {
+			port = 3306
+		}
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", cfg.DB.Username, cfg.DB.Password, host, port, cfg.DB.Name)
+	}
 	db, err := storage.NewMySQL(storage.Config{
-		DSN:                    cfg.DB.DSN,
+		DSN:                    dsn,
 		MaxOpenConns:           cfg.DB.MaxOpenConns,
 		MaxIdleConns:           cfg.DB.MaxIdleConns,
 		ConnMaxIdleSeconds:     cfg.DB.ConnMaxIdleSeconds,
@@ -69,7 +83,8 @@ func main() {
 			logger.Error("read migration", "file", name, "error", err)
 			os.Exit(1)
 		}
-		if err := execStatements(ctx, db, string(sqlBytes)); err != nil {
+		up := extractUp(string(sqlBytes))
+		if err := execStatements(ctx, db, up); err != nil {
 			logger.Error("apply migration", "file", name, "error", err)
 			os.Exit(1)
 		}
@@ -133,6 +148,20 @@ func execStatements(ctx context.Context, db *sql.DB, script string) error {
 	// for multi-statement files. Keep scripts single-statement or enable multiStatements.
 	_, err := db.ExecContext(ctx, script)
 	return err
+}
+
+// extractUp returns the content between goose Up and Down markers if present, else the script as-is.
+func extractUp(script string) string {
+	lower := strings.ToLower(script)
+	upIdx := strings.Index(lower, "-- +goose up")
+	if upIdx == -1 {
+		return script
+	}
+	downIdx := strings.Index(lower, "-- +goose down")
+	if downIdx == -1 {
+		return script[upIdx+len("-- +goose up"):]
+	}
+	return script[upIdx+len("-- +goose up") : downIdx]
 }
 
 func recordApplied(db *sql.DB, version string) error {
