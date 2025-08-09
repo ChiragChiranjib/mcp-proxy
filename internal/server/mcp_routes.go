@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/mark3labs/mcp-go/mcp"
+	mserver "github.com/mark3labs/mcp-go/server"
 	"github.com/modelcontextprotocol/go-sdk/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -17,41 +19,44 @@ import (
 )
 
 func addMCPRoutes(r *mux.Router, deps Deps, cfg Config) {
+	// Keep go-sdk path compiled but unused; prefer mcp-go stateless server.
+	mountMCPGoRoutes(r, deps, cfg)
+	return
 
-	streamableHandler := sdk.NewStreamableHTTPHandler(
-		func(req *http.Request) *sdk.Server {
-			vsID := mux.Vars(req)["virtual_server_id"]
-			deps.Logger.Info(
-				"MCP_STREAMABLE_HANDLER_INIT",
-				"method", req.Method,
-				"path", req.URL.Path,
-				"vs_id", vsID,
-			)
-			srv, err := buildMCPServer(
-				context.Background(),
-				deps,
-				vsID,
-			)
-			if err != nil {
-				deps.Logger.Error(
-					"MCP_STREAMABLE_HANDLER_BUILD_ERROR",
-					"error", err,
-				)
-				return sdk.NewServer(
-					&sdk.Implementation{
-						Name:    "mcp-proxy",
-						Version: "1.0.0",
-					},
-					nil,
-				)
-			}
-			deps.Logger.Info("MCP_STREAMABLE_HANDLER_BUILD_OK")
-			return srv
-		},
-		nil,
-	)
-
-	r.Path(cfg.MCPMount).Handler(streamableHandler).Methods(http.MethodGet, http.MethodPost)
+	//streamableHandler := sdk.NewStreamableHTTPHandler(
+	//	func(req *http.Request) *sdk.Server {
+	//		vsID := mux.Vars(req)["virtual_server_id"]
+	//		deps.Logger.Info(
+	//			"MCP_STREAMABLE_HANDLER_INIT",
+	//			"method", req.Method,
+	//			"path", req.URL.Path,
+	//			"vs_id", vsID,
+	//		)
+	//		srv, err := buildMCPServer(
+	//			context.Background(),
+	//			deps,
+	//			vsID,
+	//		)
+	//		if err != nil {
+	//			deps.Logger.Error(
+	//				"MCP_STREAMABLE_HANDLER_BUILD_ERROR",
+	//				"error", err,
+	//			)
+	//			return sdk.NewServer(
+	//				&sdk.Implementation{
+	//					Name:    "mcp-proxy",
+	//					Version: "1.0.0",
+	//				},
+	//				nil,
+	//			)
+	//		}
+	//		deps.Logger.Info("MCP_STREAMABLE_HANDLER_BUILD_OK")
+	//		return srv
+	//	},
+	//	nil,
+	//)
+	//
+	//r.Path(cfg.MCPMount).Handler(streamableHandler).Methods(http.MethodGet, http.MethodPost)
 }
 
 // buildMCPServer assembles a stateless sdk.Server with proxy tools from a virtual server id.
@@ -94,13 +99,31 @@ func buildMCPServer(
 			}
 		}
 
+		// Decode input schema if available
+		var inputSchema *jsonschema.Schema
+		if len(t.InputSchema) > 0 {
+			var s jsonschema.Schema
+			if err := json.Unmarshal(t.InputSchema, &s); err != nil {
+				deps.Logger.Error(
+					"BUILD_MCP_SERVER_DECODE_SCHEMA_ERROR",
+					"error", err,
+					"tool_mod", t.ModifiedName,
+				)
+			} else {
+				inputSchema = &s
+			}
+		}
+		if inputSchema == nil {
+			inputSchema = &jsonschema.Schema{}
+		}
+
 		// Define tool on the proxy server.
 		srv.AddTool(
 			&sdk.Tool{
 				Name:        t.ModifiedName,
 				Description: fmt.Sprintf("Proxy for %s", t.OriginalName),
 				Annotations: annotations,
-				InputSchema: &jsonschema.Schema{},
+				InputSchema: inputSchema,
 			},
 			func(
 				reqCtx context.Context,
@@ -233,4 +256,116 @@ func buildMCPServer(
 	}
 	deps.Logger.Info("BUILD_MCP_SERVER_OK", "vs_id", vsID)
 	return srv, nil
+}
+
+// addMCPGoRoutes mounts an mcp-go streamable HTTP server (stateless) at cfg.MCPMount.
+func mountMCPGoRoutes(r *mux.Router, deps Deps, cfg Config) {
+	// Build MCP server core
+	srv := mserver.NewMCPServer(
+		"mcp-proxy", "1.0.0",
+		mserver.WithLogging(),
+		mserver.WithToolCapabilities(true),
+		// Populate per-request session tools via hook
+		mserver.WithHooks(&mserver.Hooks{
+			OnRequestInitialization: []mserver.OnRequestInitializationFunc{
+				func(ctx context.Context, _ any, _ any) error {
+					// Extract virtual_server_id from request (set via context func)
+					v := ctx.Value(requestVarsKey{})
+					vars, _ := v.(map[string]string)
+					vsID := ""
+					if vars != nil {
+						vsID = vars["virtual_server_id"]
+					}
+
+					// Session-scoped tools
+					sess := mserver.ClientSessionFromContext(ctx)
+					sTools, ok := sess.(mserver.SessionWithTools)
+					if !ok {
+						return nil
+					}
+					deps.Logger.Info("SESSION_TOOLS_LOAD_INIT", "vs_id", vsID)
+					tools, err := deps.Tools.ListForVirtualServer(ctx, vsID)
+					if err != nil {
+						deps.Logger.Error("SESSION_TOOLS_LOAD_ERROR", "error", err)
+						return nil
+					}
+					deps.Logger.Info("SESSION_TOOLS_LOAD_OK", "count", len(tools))
+
+					// Build session tool map with proxy handlers
+					st := make(map[string]mserver.ServerTool, len(tools))
+					for _, t := range tools {
+						// Build tool from DB record
+						tool := CreateMCPTool(t)
+
+						handler := makeProxyToolHandler(
+							deps,
+							t.OriginalName,
+							t.MCPHubServerID,
+						)
+						st[t.OriginalName] = mserver.ServerTool{
+							Tool:    tool,
+							Handler: handler,
+						}
+					}
+					sTools.SetSessionTools(st)
+					deps.Logger.Info("SESSION_TOOLS_SET_OK", "count", len(st))
+					return nil
+				},
+			},
+		}),
+	)
+
+	srv.AddTools()
+
+	deps.Logger.Info("STREAMABLE_SERVER_BUILD_INIT")
+	// Build streamable HTTP handler in stateless mode and inject mux vars
+	h := mserver.NewStreamableHTTPServer(
+		srv,
+		mserver.WithStateLess(true),
+		mserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			return context.WithValue(ctx, requestVarsKey{}, mux.Vars(r))
+		}),
+	)
+	deps.Logger.Info("STREAMABLE_SERVER_BUILD_OK")
+
+	// Mount handler
+	r.Path(cfg.MCPMount).Handler(h).Methods(http.MethodGet, http.MethodPost, http.MethodDelete)
+	deps.Logger.Info("MCP_ROUTES_MOUNTED", "mount", cfg.MCPMount)
+}
+
+// requestVarsKey is used to stash mux vars into context for mcp-go hooks.
+type requestVarsKey struct{}
+
+// makeProxyToolHandler returns an mcp-go ToolHandlerFunc that proxies to the
+// upstream MCP server using our existing repo/services and encryption logic.
+func makeProxyToolHandler(
+	deps Deps,
+	upstreamOriginalName string,
+	hubID string,
+) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Fetch hub and build headers (bearer/custom)
+		hub, err := deps.Hubs.GetWithURL(ctx, hubID)
+		if err != nil {
+			deps.Logger.Error("PROXY_TOOL_GET_HUB_ERROR", "error", err)
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil
+		}
+		// Convert to models.MCPHubServer to pass to header builder
+		mhub := hub.MCPHubServer
+		headers := buildUpstreamHeaders(deps, &mhub)
+
+		// Call upstream via helper (uses encryption-aware headers)
+		var args map[string]any
+		if req.Params.Arguments != nil {
+			if m, ok := req.Params.Arguments.(map[string]any); ok {
+				args = m
+			}
+		}
+		res, callErr := callUpstreamTool(ctx, deps, hub.ServerURL, headers, upstreamOriginalName, args)
+		if callErr != nil {
+			deps.Logger.Error("PROXY_TOOL_CALL_ERROR", "error", callErr)
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: callErr.Error()}}}, nil
+		}
+		return res, nil
+	}
 }

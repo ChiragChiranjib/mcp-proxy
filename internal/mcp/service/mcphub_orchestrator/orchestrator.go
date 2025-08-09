@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"gorm.io/gorm"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	mcpclient "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/client"
@@ -59,11 +59,12 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 
 	// Fetch capabilities via init and tools via client
 	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL)
-	//caps, err := mcpclient.InitCapabilities(ctx, serverURL)
-	//if err != nil {
-	//	o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
-	//	return "", err
-	//}
+	caps, err := mcpclient.InitCapabilities(ctx, serverURL)
+	if err != nil {
+		o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
+		return "", err
+	}
+	o.logger.Info("ORCH_INIT_CAPABILITIES_OK", "len", len(caps))
 	o.logger.Info("ORCH_LIST_TOOLS_INIT")
 	toolsRes, err := mcpclient.ListTools(ctx, serverURL)
 	if err != nil {
@@ -80,7 +81,7 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 		MCPServerID:  req.MCPServerID,
 		Status:       m.StatusActive,
 		Transport:    req.Transport,
-		Capabilities: nil,
+		Capabilities: caps,
 		AuthType:     req.AuthType,
 		AuthValue:    req.AuthValue,
 	}
@@ -108,6 +109,7 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 			OriginalName:   t.Name,
 			ModifiedName:   mod,
 			MCPHubServerID: hubID,
+			Description:    t.Description,
 			InputSchema:    schemaJSON,
 			Annotations:    nil,
 			Status:         m.StatusActive,
@@ -117,12 +119,12 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 
 	// Transaction: create hub and its tools
 	o.logger.Info("ORCH_ADD_HUB_TX_BEGIN")
-	err = o.repo.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&hub).Error; err != nil {
+	err = o.repo.Transaction(func(tx *repo.Repo) error {
+		if err := tx.WithContext(ctx).Create(&hub).Error; err != nil {
 			return err
 		}
 		if len(toolModels) > 0 {
-			if err := tx.Create(&toolModels).Error; err != nil {
+			if err := tx.WithContext(ctx).Create(&toolModels).Error; err != nil {
 				return err
 			}
 		}
@@ -160,9 +162,9 @@ func (o *Orchestrator) RefreshHub(
 	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_OK", "tool_count", len(res.Tools))
 
 	// Desired set
-	desired := make(map[string]struct{})
+	desired := make(map[string]mcp.Tool)
 	for _, t := range res.Tools {
-		desired[serverName+"-"+t.Name] = struct{}{}
+		desired[serverName+"-"+t.Name] = t
 	}
 
 	// Current set from DB
@@ -182,14 +184,24 @@ func (o *Orchestrator) RefreshHub(
 
 	// Compute to-add and to-remove
 	var toInsert []m.MCPTool
-	for name := range desired {
+	for name, tool := range desired {
 		if _, ok := currentSet[name]; !ok {
+
+			annotationsJSON, err := json.Marshal(tool.Annotations)
+			if err != nil {
+				o.logger.Error("ORCH_REFRESH_ANNOTATIONS_MARSHALL_ERROR",
+					"error", err)
+			}
+
 			toInsert = append(toInsert, m.MCPTool{
 				ID:             idgen.NewID(),
 				UserID:         userID,
-				OriginalName:   name, // best effort; upstream name not stored here
-				ModifiedName:   name,
+				OriginalName:   tool.Name,
+				ModifiedName:   serverName + "-" + tool.Name,
 				MCPHubServerID: hubID,
+				Description:    tool.Description,
+				InputSchema:    tool.RawInputSchema,
+				Annotations:    annotationsJSON,
 				Status:         m.StatusActive,
 			})
 		}
@@ -204,14 +216,14 @@ func (o *Orchestrator) RefreshHub(
 
 	// Apply changes transactionally
 	o.logger.Info("ORCH_REFRESH_TX_BEGIN", "to_add", len(toInsert), "to_delete", len(toDeleteIDs))
-	err = o.repo.Transaction(func(tx *gorm.DB) error {
+	err = o.repo.Transaction(func(tx *repo.Repo) error {
 		if len(toInsert) > 0 {
-			if err := tx.Create(&toInsert).Error; err != nil {
+			if err := tx.WithContext(ctx).Create(&toInsert).Error; err != nil {
 				return err
 			}
 		}
 		if len(toDeleteIDs) > 0 {
-			if err := tx.
+			if err := tx.WithContext(ctx).
 				Where("id IN ?", toDeleteIDs).
 				Delete(&m.MCPTool{}).Error; err != nil {
 				return err

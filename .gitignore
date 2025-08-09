@@ -38,3 +38,5 @@ ui/dist
 
 server.out
 server.pid
+
+mcp-gateway

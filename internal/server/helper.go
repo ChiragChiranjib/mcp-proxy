@@ -1,10 +1,16 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
+	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
+	ic "github.com/ChiragChiranjib/mcp-proxy/internal/server/httpclient"
+	mclient "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // WriteJSON ...
@@ -43,4 +49,114 @@ func GetUserRole(r *http.Request) string {
 		}
 	}
 	return ""
+}
+
+// CreateMCPTool constructs an mcp-go Tool from a DB tool record.
+func CreateMCPTool(t m.MCPTool) mcp.Tool {
+	tool := mcp.Tool{
+		Name:        t.OriginalName,
+		Description: t.Description,
+	}
+	if len(t.InputSchema) > 0 {
+		tool.RawInputSchema = json.RawMessage(t.InputSchema)
+	} else {
+		tool.InputSchema = mcp.ToolInputSchema{Type: "object"}
+	}
+	if len(t.Annotations) > 0 {
+		var ann mcp.ToolAnnotation
+		if err := json.Unmarshal(t.Annotations, &ann); err == nil {
+			tool.Annotations = ann
+		}
+	}
+	return tool
+}
+
+// buildUpstreamHeaders prepares Authorization/custom headers, with AES decryption
+// when bearer token is stored encrypted as JSON.
+func buildUpstreamHeaders(deps Deps, hub *m.MCPHubServer) map[string]string {
+	deps.Logger.Info(
+		"BUILD_UPSTREAM_HEADERS_INIT",
+		"hub_id", hub.ID,
+		"auth_type", string(hub.AuthType),
+	)
+	headers := map[string]string{}
+	switch hub.AuthType {
+	case m.AuthTypeBearer:
+		token := string(hub.AuthValue)
+		if deps.Encrypter != nil && len(hub.AuthValue) > 0 && hub.AuthValue[0] == '{' {
+			if b, err := deps.Encrypter.DecryptFromJSON(hub.AuthValue); err == nil {
+				token = string(b)
+				deps.Logger.Info("DECRYPT_BEARER_TOKEN_OK", "len", len(token))
+			} else {
+				deps.Logger.Error("DECRYPT_BEARER_TOKEN_ERROR", "error", err)
+			}
+		}
+		headers["Authorization"] = "Bearer " + token
+	case m.AuthTypeCustomHeaders:
+		var hdrs map[string]string
+		if err := json.Unmarshal(hub.AuthValue, &hdrs); err != nil {
+			deps.Logger.Error("CUSTOM_HEADERS_DECODE_ERROR", "error", err)
+		} else {
+			for k, v := range hdrs {
+				headers[k] = v
+			}
+			deps.Logger.Info("CUSTOM_HEADERS_APPLIED", "count", len(headers))
+		}
+	default:
+		deps.Logger.Info("NO_AUTH_HEADERS_APPLIED")
+	}
+	return headers
+}
+
+// callUpstreamTool performs the upstream MCP tool call via mcp-go and returns result.
+func callUpstreamTool(
+	ctx context.Context,
+	deps Deps,
+	serverURL string,
+	headers map[string]string,
+	originalName string,
+	args map[string]any,
+) (*mcp.CallToolResult, error) {
+	deps.Logger.Info(
+		"CALL_UPSTREAM_TOOL_INIT",
+		"tool_name", originalName,
+		"headers_count", len(headers),
+	)
+	// Build HTTP client with headers
+	httpClient := ic.NewHTTPClient(ic.WithHeaders(headers))
+	trans, err := transport.NewStreamableHTTP(serverURL, transport.WithHTTPBasicClient(httpClient))
+	if err != nil {
+		deps.Logger.Error("CREATE_TRANSPORT_ERROR", "error", err)
+		return nil, err
+	}
+	c := mclient.NewClient(trans)
+	if err := c.Start(ctx); err != nil {
+		deps.Logger.Error("UPSTREAM_CLIENT_START_ERROR", "error", err)
+		return nil, err
+	}
+	defer func() { _ = c.Close() }()
+	// Initialize
+	if _, err := c.Initialize(ctx, mcp.InitializeRequest{
+		Request: mcp.Request{Method: string(mcp.MethodInitialize)},
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			ClientInfo:      mcp.Implementation{Name: "mcp-proxy-upstream", Version: "1.0.0"},
+			Capabilities:    mcp.ClientCapabilities{},
+		},
+	}); err != nil {
+		deps.Logger.Error("UPSTREAM_INITIALIZE_ERROR", "error", err)
+		return nil, err
+	}
+	deps.Logger.Info("UPSTREAM_INITIALIZE_OK")
+	// Call tool (use original name expected by upstream)
+	res, err := c.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name:      originalName,
+		Arguments: args,
+	}})
+	if err != nil {
+		deps.Logger.Error("UPSTREAM_TOOL_CALL_ERROR", "error", err)
+		return nil, err
+	}
+	deps.Logger.Info("UPSTREAM_TOOL_CALL_OK", "tool_name", originalName)
+	return res, nil
 }

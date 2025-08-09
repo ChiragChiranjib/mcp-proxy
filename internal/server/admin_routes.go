@@ -215,19 +215,32 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 
 // Virtual server routes
 func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
-	// Create
+	// Create with optional tool_ids
 	r.HandleFunc(
 		cfg.AdminPrefix+"/virtual-servers",
 		func(w http.ResponseWriter, r *http.Request) {
 			userID := GetUserID(r)
-			if deps.Logger != nil {
-				deps.Logger.Info("CREATE_VIRTUAL_SERVER_INIT", "user_id", userID)
+			var body struct {
+				ToolIDs []string `json:"tool_ids"`
 			}
-			id, err := deps.Virtual.Create(r.Context(), userID)
+			if !ReadJSON(w, r, &body) {
+				deps.Logger.Error("CREATE_VS_READ_BODY_ERROR")
+				return
+			}
+			deps.Logger.Info("CREATE_VIRTUAL_SERVER_INIT",
+				"user_id", userID,
+				"tool_ids_len", len(body.ToolIDs))
+			var (
+				id  string
+				err error
+			)
+			if len(body.ToolIDs) > 0 {
+				id, err = deps.Virtual.CreateWithTools(r.Context(), userID, body.ToolIDs)
+			} else {
+				id, err = deps.Virtual.Create(r.Context(), userID)
+			}
 			if err != nil {
-				if deps.Logger != nil {
-					deps.Logger.Error("CREATE_VIRTUAL_SERVER_DB_ERROR", "error", err)
-				}
+				deps.Logger.Error("CREATE_VIRTUAL_SERVER_DB_ERROR", "error", err)
 				WriteJSON(
 					w,
 					http.StatusInternalServerError,
@@ -235,9 +248,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("CREATE_VIRTUAL_SERVER_OK", "id", id)
-			}
+			deps.Logger.Info("CREATE_VIRTUAL_SERVER_OK", "id", id)
 			WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
 		},
 	).Methods(http.MethodPost)
@@ -247,14 +258,10 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 		cfg.AdminPrefix+"/virtual-servers",
 		func(w http.ResponseWriter, r *http.Request) {
 			userID := GetUserID(r)
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_VIRTUAL_SERVERS_INIT", "user_id", userID)
-			}
+			deps.Logger.Info("LIST_VIRTUAL_SERVERS_INIT", "user_id", userID)
 			items, err := deps.Virtual.ListForUser(r.Context(), userID)
 			if err != nil {
-				if deps.Logger != nil {
-					deps.Logger.Error("LIST_VIRTUAL_SERVERS_ERROR", "error", err)
-				}
+				deps.Logger.Error("LIST_VIRTUAL_SERVERS_ERROR", "error", err)
 				WriteJSON(
 					w,
 					http.StatusInternalServerError,
@@ -262,9 +269,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_VIRTUAL_SERVERS_OK", "count", len(items))
-			}
+			deps.Logger.Info("LIST_VIRTUAL_SERVERS_OK", "count", len(items))
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
 	).Methods(http.MethodGet)
@@ -311,16 +316,12 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 		cfg.AdminPrefix+"/virtual-servers/{id}/tools",
 		func(w http.ResponseWriter, r *http.Request) {
 			vsID := mux.Vars(r)["id"]
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_VS_TOOLS_INIT", "id", vsID)
-			}
+			deps.Logger.Info("LIST_VS_TOOLS_INIT", "id", vsID)
 			items, err := deps.Tools.ListForVirtualServer(
 				r.Context(), vsID,
 			)
 			if err != nil {
-				if deps.Logger != nil {
-					deps.Logger.Error("LIST_VS_TOOLS_ERROR", "error", err)
-				}
+				deps.Logger.Error("LIST_VS_TOOLS_ERROR", "error", err)
 				WriteJSON(
 					w,
 					http.StatusInternalServerError,
@@ -328,9 +329,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_VS_TOOLS_OK", "count", len(items))
-			}
+			deps.Logger.Info("LIST_VS_TOOLS_OK", "count", len(items))
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
 	).Methods(http.MethodGet)

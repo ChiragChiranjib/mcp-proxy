@@ -106,6 +106,51 @@ func (s *Service) ReplaceTools(
 	return nil
 }
 
+// CreateWithTools creates a virtual server and assigns the provided tool IDs in one transaction.
+// It verifies each tool exists and is ACTIVE before adding.
+func (s *Service) CreateWithTools(
+	ctx context.Context,
+	userID string,
+	toolIDs []string,
+) (string, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+
+	if len(toolIDs) > 50 {
+		toolIDs = toolIDs[:50]
+	}
+
+	id := "vs_" + idgen.NewID()
+
+	// Run in a transaction
+	err := s.repo.Transaction(func(tx *repo.Repo) error {
+		// Create virtual server
+		if err := tx.CreateVirtualServer(ctx, m.MCPVirtualServer{
+			ID:     id,
+			UserID: userID,
+			Status: m.StatusActive,
+		}); err != nil {
+			return err
+		}
+
+		// Add tools after validation
+		for _, tid := range toolIDs {
+			// Validate tool exists and active
+			if _, err := tx.GetActiveToolByID(ctx, tid); err != nil {
+				return err
+			}
+			if err := tx.AddVirtualServerTool(ctx, id, tid); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // Delete removes a virtual server.
 func (s *Service) Delete(ctx context.Context, id string) error {
 	ctx, cancel := s.withTimeout(ctx)

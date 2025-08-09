@@ -40,3 +40,10 @@ func NewFromConfig(dbCfg config.DatabaseConfig) (*Repo, error) {
 	}
 	return New(dsn)
 }
+
+// Transaction helper that accepts a function with *Repo operating on same DB
+func (r *Repo) Transaction(fn func(tx *Repo) error) error {
+	return r.DB.Transaction(func(txdb *gorm.DB) error {
+		return fn(&Repo{DB: txdb})
+	})
+}

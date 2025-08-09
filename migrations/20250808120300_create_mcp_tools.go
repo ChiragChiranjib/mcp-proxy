@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS mcp_tools (
   original_name VARCHAR(255) NOT NULL,
   modified_name VARCHAR(255) NOT NULL,
   mcp_hub_server_id CHAR(22) NOT NULL,
+  description TEXT,
   input_schema JSON,
   annotations JSON,
   status VARCHAR(30) NOT NULL,

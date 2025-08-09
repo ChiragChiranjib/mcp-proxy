@@ -2,58 +2,74 @@ package client
 
 import (
 	"context"
-	"os"
+	"encoding/json"
 	"time"
 
-	"github.com/ChiragChiranjib/mcp-proxy/internal/server/httpclient"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	mclient "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// ConnectStreamable creates an MCP client using streamable HTTP transport to the given URL.
-// Caller must Close the returned ClientSession.
-func ConnectStreamable(ctx context.Context, url string) (*sdk.ClientSession, error) {
-	httpClient := httpclient.NewHTTPClient()
-	var transport sdk.Transport = sdk.NewStreamableClientTransport(
-		url, &sdk.StreamableClientTransportOptions{HTTPClient: httpClient},
-	)
-	transport = sdk.NewLoggingTransport(transport, os.Stdout)
-	c := sdk.NewClient(
-		&sdk.Implementation{Name: "mcp-client", Version: "1.0.0"},
-		nil,
-	)
-	return c.Connect(ctx, transport)
-}
-
-// ListTools connects to the server and returns its tools list. The caller does not need to manage session lifecycle.
-func ListTools(ctx context.Context, url string) (*sdk.ListToolsResult, error) {
-	cs, err := ConnectStreamable(ctx, url)
+// ConnectStreamable creates an mcp-go streamable HTTP client to the given URL.
+// Caller must Close via client.Close().
+func ConnectStreamable(ctx context.Context, url string) (*mclient.Client, error) {
+	trans, err := transport.NewStreamableHTTP(url)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cs.Close() }()
-	return cs.ListTools(ctx, &sdk.ListToolsParams{})
+	c := mclient.NewClient(trans)
+	if err := c.Start(ctx); err != nil {
+		return nil, err
+	}
+	// Initialize
+	_, err = c.Initialize(ctx, mcp.InitializeRequest{
+		Request: mcp.Request{Method: string(mcp.MethodInitialize)},
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			ClientInfo:      mcp.Implementation{Name: "mcp-client", Version: "1.0.0"},
+			Capabilities:    mcp.ClientCapabilities{},
+		},
+	})
+	if err != nil {
+		_ = c.Close()
+		return nil, err
+	}
+	return c, nil
 }
 
-// CallTool connects to the server and calls a tool with the provided name and arguments.
-// args should be a JSON-serializable map.
-func CallTool(ctx context.Context, url string, toolName string, args map[string]any) (*sdk.CallToolResultFor[any], error) {
-	cs, err := ConnectStreamable(ctx, url)
+// ListTools connects and lists tools using mcp-go client.
+func ListTools(ctx context.Context, url string) (*mcp.ListToolsResult, error) {
+	c, err := ConnectStreamable(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cs.Close() }()
+	defer func() { _ = c.Close() }()
+	return c.ListTools(ctx, mcp.ListToolsRequest{})
+}
+
+// CallTool connects and calls a tool with the provided name and arguments.
+func CallTool(ctx context.Context, url string, toolName string, args map[string]any) (*mcp.CallToolResult, error) {
+	c, err := ConnectStreamable(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = c.Close() }()
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	return cs.CallTool(cctx, &sdk.CallToolParams{Name: toolName, Arguments: args})
+	return c.CallTool(cctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name:      toolName,
+		Arguments: args,
+	}})
 }
 
-// InitCapabilities initializes the connection and returns raw capabilities JSON if available.
-// For now, return an empty JSON object as a placeholder; extend when SDK exposes capabilities.
+// InitCapabilities initializes and returns the negotiated capabilities.
 func InitCapabilities(ctx context.Context, url string) ([]byte, error) {
-	cs, err := ConnectStreamable(ctx, url)
+	c, err := ConnectStreamable(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cs.Close() }()
-	return []byte("{}"), nil
+	defer func() { _ = c.Close() }()
+	// Marshal server capabilities as raw JSON for now
+	caps := c.GetServerCapabilities()
+	return json.Marshal(caps)
 }

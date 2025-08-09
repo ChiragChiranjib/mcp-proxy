@@ -9,6 +9,7 @@ type MCPTool struct {
 	OriginalName   string    `gorm:"type:varchar(255);not null" json:"original_name"`
 	ModifiedName   string    `gorm:"type:varchar(255);index:user_mod,priority:2" json:"modified_name"`
 	MCPHubServerID string    `gorm:"column:mcp_hub_server_id;type:char(22);index" json:"mcp_hub_server_id"`
+	Description    string    `gorm:"type:text" json:"description"`
 	InputSchema    []byte    `gorm:"type:json" json:"input_schema"`
 	Annotations    []byte    `gorm:"type:json" json:"annotations"`
 	Status         Status    `gorm:"type:varchar(30);not null" json:"status"`

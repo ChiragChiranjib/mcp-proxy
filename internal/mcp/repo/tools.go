@@ -57,3 +57,10 @@ func (r *Repo) ListActiveToolsForHub(ctx context.Context, hubServerID string) ([
 	}
 	return tools, nil
 }
+
+// GetActiveToolByID returns a tool by id only if it is ACTIVE.
+func (r *Repo) GetActiveToolByID(ctx context.Context, id string) (m.MCPTool, error) {
+	var t m.MCPTool
+	err := r.WithContext(ctx).Where("id = ? AND status = 'ACTIVE'", id).Take(&t).Error
+	return t, err
+}
