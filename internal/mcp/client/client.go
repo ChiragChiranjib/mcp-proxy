@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"os"
+	"time"
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/server/httpclient"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,10 +13,14 @@ import (
 // Caller must Close the returned ClientSession.
 func ConnectStreamable(ctx context.Context, url string) (*sdk.ClientSession, error) {
 	httpClient := httpclient.NewHTTPClient()
-	transport := sdk.NewStreamableClientTransport(
+	var transport sdk.Transport = sdk.NewStreamableClientTransport(
 		url, &sdk.StreamableClientTransportOptions{HTTPClient: httpClient},
 	)
-	c := sdk.NewClient("mcp-client", "0.1.0", nil)
+	transport = sdk.NewLoggingTransport(transport, os.Stdout)
+	c := sdk.NewClient(
+		&sdk.Implementation{Name: "mcp-client", Version: "1.0.0"},
+		nil,
+	)
 	return c.Connect(ctx, transport)
 }
 
@@ -36,7 +42,9 @@ func CallTool(ctx context.Context, url string, toolName string, args map[string]
 		return nil, err
 	}
 	defer func() { _ = cs.Close() }()
-	return cs.CallTool(ctx, &sdk.CallToolParams{Name: toolName, Arguments: args})
+	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	return cs.CallTool(cctx, &sdk.CallToolParams{Name: toolName, Arguments: args})
 }
 
 // InitCapabilities initializes the connection and returns raw capabilities JSON if available.
