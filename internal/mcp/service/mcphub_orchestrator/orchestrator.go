@@ -58,12 +58,12 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 	o.logger.Info("ORCH_RESOLVE_SERVER_OK", "server_name", serverName, "server_url_len", len(serverURL))
 
 	// Fetch capabilities via init and tools via client
-	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT")
-	caps, err := mcpclient.InitCapabilities(ctx, serverURL)
-	if err != nil {
-		o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
-		return "", err
-	}
+	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL)
+	//caps, err := mcpclient.InitCapabilities(ctx, serverURL)
+	//if err != nil {
+	//	o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
+	//	return "", err
+	//}
 	o.logger.Info("ORCH_LIST_TOOLS_INIT")
 	toolsRes, err := mcpclient.ListTools(ctx, serverURL)
 	if err != nil {
@@ -80,7 +80,7 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 		MCPServerID:  req.MCPServerID,
 		Status:       m.StatusActive,
 		Transport:    req.Transport,
-		Capabilities: caps,
+		Capabilities: nil,
 		AuthType:     req.AuthType,
 		AuthValue:    req.AuthValue,
 	}

@@ -35,3 +35,6 @@ bin/
 
 ui/node_modules
 ui/dist
+
+server.out
+server.pid

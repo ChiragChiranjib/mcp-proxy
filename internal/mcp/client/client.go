@@ -3,14 +3,18 @@ package client
 import (
 	"context"
 
+	"github.com/ChiragChiranjib/mcp-proxy/internal/server/httpclient"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ConnectStreamable creates an MCP client using streamable HTTP transport to the given URL.
 // Caller must Close the returned ClientSession.
 func ConnectStreamable(ctx context.Context, url string) (*sdk.ClientSession, error) {
-	transport := sdk.NewStreamableClientTransport(url, nil)
-	c := sdk.NewClient(&sdk.Implementation{Name: "mcp-proxy", Version: "0.1.0"}, nil)
+	httpClient := httpclient.NewHTTPClient()
+	transport := sdk.NewStreamableClientTransport(
+		url, &sdk.StreamableClientTransportOptions{HTTPClient: httpClient},
+	)
+	c := sdk.NewClient("mcp-client", "0.1.0", nil)
 	return c.Connect(ctx, transport)
 }
 

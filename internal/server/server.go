@@ -83,19 +83,17 @@ func New(cfg Config, opts ...Option) *Server {
 	r.Use(middlewares.RequestID())
 	r.Use(middlewares.Recover(deps.Logger))
 
-	// Optional Basic Auth: if Authorization header present, validate and set context
-	if deps.AppConfig != nil && deps.AppConfig.Security.AESKey != "" { /* noop to avoid unused */
-	}
 	if deps.AppConfig != nil && deps.AppConfig.Security.BasicUsername != "" {
 		r.Use(middlewares.BasicAuth(
 			deps.AppConfig.Security.BasicUsername,
 			deps.AppConfig.Security.BasicPassword,
 			deps.AppConfig.Security.AdminUserID,
+			deps.Logger,
 		))
 	}
 
 	if deps.AppConfig != nil && deps.AppConfig.Security.JWTSecret != "" {
-		r.Use(middlewares.Auth(deps.AppConfig.Security.JWTSecret))
+		r.Use(middlewares.Auth(deps.AppConfig.Security.JWTSecret, deps.Logger))
 	}
 
 	for _, m := range cfg.Middlewares {

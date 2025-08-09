@@ -30,10 +30,7 @@ func addMCPRoutes(r *mux.Router, deps Deps, cfg Config) {
 					"error", err,
 				)
 				return sdk.NewServer(
-					&sdk.Implementation{
-						Name:    "mcp-proxy",
-						Version: "0.1.0",
-					},
+					"mcp-proxy", "0.1.0",
 					nil,
 				)
 			}
@@ -53,10 +50,7 @@ func buildMCPServer(
 	vsID string,
 ) (*sdk.Server, error) {
 	deps.Logger.Info("BUILD_MCP_SERVER_INIT", "vs_id", vsID)
-	srv := sdk.NewServer(
-		&sdk.Implementation{Name: "mcp-proxy", Version: "0.1.0"},
-		nil,
-	)
+	srv := sdk.NewServer("mcp-proxy-22", "0.1.0", nil)
 
 	tools, err := deps.Tools.ListForVirtualServer(ctx, vsID)
 	if err != nil {
@@ -65,11 +59,7 @@ func buildMCPServer(
 	}
 	deps.Logger.Info("BUILD_MCP_SERVER_LIST_TOOLS_OK", "count", len(tools))
 	for _, t := range tools {
-		tool := &sdk.Tool{
-			Name:        t.ModifiedName,
-			Description: fmt.Sprintf("Proxy for %s", t.OriginalName),
-		}
-		sdk.AddTool(srv, tool, func(
+		sdk.NewServerTool(t.ModifiedName, fmt.Sprintf("Proxy for %s", t.OriginalName), func(
 			_ context.Context,
 			_ *sdk.ServerSession,
 			params *sdk.CallToolParamsFor[map[string]any],
@@ -130,7 +120,7 @@ func buildMCPServer(
 				hub.ServerURL,
 				&sdk.StreamableClientTransportOptions{HTTPClient: httpClient},
 			)
-			client := sdk.NewClient(&sdk.Implementation{Name: "mcp-proxy-proxy", Version: "0.1.0"}, nil)
+			client := sdk.NewClient("mcp-proxy-proxy", "0.1.0", nil)
 			cs, err := client.Connect(ctx, transport)
 			if err != nil {
 				deps.Logger.Error("PROXY_TOOL_CONNECT_ERROR", "error", err)
