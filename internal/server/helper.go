@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
 	ic "github.com/ChiragChiranjib/mcp-proxy/internal/httpclient"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 	mclient "github.com/mark3labs/mcp-go/client"
@@ -29,26 +28,6 @@ func ReadJSON[T any](w http.ResponseWriter, r *http.Request, dst *T) bool {
 		return false
 	}
 	return true
-}
-
-// GetUserID ...
-func GetUserID(r *http.Request) string {
-	if v := r.Context().Value(ck.UserIDKey); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
-// GetUserRole returns the role string from context if present.
-func GetUserRole(r *http.Request) string {
-	if v := r.Context().Value(ck.UserRoleKey); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return ""
 }
 
 // CreateMCPTool constructs an mcp-go Tool from a DB tool record.
