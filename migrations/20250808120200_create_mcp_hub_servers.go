@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS mcp_hub_servers (
   CONSTRAINT fk_hub_mcp_srv FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE,
   UNIQUE KEY uq_user_server (user_id, mcp_server_id),
   INDEX idx_hub_user (user_id),
-  INDEX idx_hub_mcp (mcp_server_id)
+  INDEX idx_hub_mcp (mcp_server_id),
+  INDEX idx_hub_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 	return err

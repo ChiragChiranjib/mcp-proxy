@@ -265,7 +265,7 @@ func _(
 func mountMCPGoRoutes(r *mux.Router, deps Deps, cfg Config) {
 	// Build MCP server core
 	srv := mserver.NewMCPServer(
-		"mcp-proxy", "1.0.0",
+		"mcp-proxy-server", "1.0.0",
 		mserver.WithLogging(),
 		mserver.WithToolCapabilities(true),
 		mserver.WithHooks(&mserver.Hooks{

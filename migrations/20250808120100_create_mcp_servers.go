@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers (name);`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_mcp_servers_url ON mcp_servers (url);`)
 	return err
 }
 

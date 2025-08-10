@@ -2,28 +2,24 @@ APP_ENV = "dev"
 MCP_MODE = "streamable-http"
 
 [server]
-port = 8080
+    port = 8080
 
 [database]
-username = "root"
-password = "adminroot"
-host = "127.0.0.1"
-port = 3306
-name = "mcp_gateway"
-max_open_conns = 25
-max_idle_conns = 10
-conn_max_idle_seconds = 300
-conn_max_lifetime_seconds = 1800
+    username = "root"
+    password = "adminroot"
+    host = "127.0.0.1"
+    port = 3306
+    name = "mcp_gateway"
+    max_open_conns = 25
+    max_idle_conns = 10
+    conn_max_idle_seconds = 300
+    conn_max_lifetime_seconds = 1800
 
 [security]
-aes_key = "0123456789abcdef0123456789abcdef"
-jwt_secret = "dev-local-dummy-jwt-secret-change-me-please"
-
-# Basic auth (dev only)
-basic_username = "chirag.chiranjib@razorpay.com"
-basic_password = "admin"
-# The user id/email that should be treated as admin
-admin_user_id = "9rh3f5FrvkXfkXQvCknQHQ"
+    aes_key = "0123456789abcdef0123456789abcdef"
+    jwt_secret = "dev-local-dummy-jwt-secret-change-me-please"
+    basic_username = "chirag.chiranjib@razorpay.com"
+    basic_password = "admin"
 
 [google]
-client_id = "112559477323-liajt09mtfcu2td5tlksv3cdros933sb.apps.googleusercontent.com"
+    client_id = "112559477323-liajt09mtfcu2td5tlksv3cdros933sb.apps.googleusercontent.com"

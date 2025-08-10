@@ -1,0 +1,58 @@
+# Multi-stage build for MCP Gateway frontend (Vite + React)
+# Usage:
+#   docker build -f build/Dockerfile.frontend -t mcp-frontend:latest ./ui
+#   docker run --rm -p 5173:80 mcp-frontend:latest
+
+#
+# Build stage
+#
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# Install dependencies first (better caching)
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules /app/node_modules
+
+# Copy the rest of the frontend source
+COPY ui/ ./
+
+# Build static assets
+RUN npm run build
+
+#
+# Runtime stage (nginx)
+#
+FROM nginx:stable-alpine
+WORKDIR /usr/share/nginx/html
+
+# Copy built assets
+COPY --from=builder /app/dist/ ./
+
+# Provide a minimal nginx config suitable for a SPA
+COPY <<'EOF' /etc/nginx/conf.d/default.conf
+server {
+  listen       80;
+  server_name  _;
+  root   /usr/share/nginx/html;
+  index  index.html;
+
+  location / {
+    try_files $uri /index.html;
+  }
+
+  # Static assets caching
+  location ~* \.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    try_files $uri =404;
+  }
+}
+EOF
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+

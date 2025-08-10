@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
 	"github.com/gorilla/mux"
 
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/idgen"
@@ -50,7 +51,7 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/catalog/servers",
 		func(w http.ResponseWriter, r *http.Request) {
-			if GetUserRole(r) != string(m.RoleAdmin) {
+			if ck.GetUserRoleFromContext(r.Context()) != string(m.RoleAdmin) {
 				if deps.Logger != nil {
 					deps.Logger.Error("CREATE_CATALOG_SERVER_FORBIDDEN")
 				}
@@ -108,7 +109,7 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/tools",
 		func(w http.ResponseWriter, r *http.Request) {
-			userID := GetUserID(r)
+			userID := ck.GetUserIDFromContext(r.Context())
 			hubID := r.URL.Query().Get("hub_server_id")
 			status := r.URL.Query().Get("status")
 			q := r.URL.Query().Get("q")
@@ -228,7 +229,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/virtual-servers",
 		func(w http.ResponseWriter, r *http.Request) {
-			userID := GetUserID(r)
+			userID := ck.GetUserIDFromContext(r.Context())
 			var body struct {
 				ToolIDs []string `json:"tool_ids"`
 			}
@@ -266,7 +267,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/virtual-servers",
 		func(w http.ResponseWriter, r *http.Request) {
-			userID := GetUserID(r)
+			userID := ck.GetUserIDFromContext(r.Context())
 			deps.Logger.Info("LIST_VIRTUAL_SERVERS_INIT", "user_id", userID)
 			items, err := deps.Virtual.ListForUser(r.Context(), userID)
 			if err != nil {
@@ -426,9 +427,9 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 		cfg.AdminPrefix+"/hub/servers",
 		func(w http.ResponseWriter, r *http.Request) {
 			if deps.Logger != nil {
-				deps.Logger.Info("LIST_HUB_SERVERS_INIT", "user_id", GetUserID(r))
+				deps.Logger.Info("LIST_HUB_SERVERS_INIT", "user_id", ck.GetUserIDFromContext(r.Context()))
 			}
-			userID := GetUserID(r)
+			userID := ck.GetUserIDFromContext(r.Context())
 			items, err := deps.Hubs.ListForUser(r.Context(), userID)
 			if err != nil {
 				if deps.Logger != nil {
@@ -463,7 +464,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			// Always trust server-side authenticated user
-			body.UserID = GetUserID(r)
+			body.UserID = ck.GetUserIDFromContext(r.Context())
 
 			id, err := orch.AddHub(r.Context(), body)
 			if err != nil {
@@ -562,7 +563,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 		cfg.AdminPrefix+"/hub/servers/{id}/refresh",
 		func(w http.ResponseWriter, r *http.Request) {
 			id := mux.Vars(r)["id"]
-			userID := GetUserID(r)
+			userID := ck.GetUserIDFromContext(r.Context())
 			if deps.Logger != nil {
 				deps.Logger.Info("REFRESH_HUB_INIT", "id", id, "user_id", userID)
 			}

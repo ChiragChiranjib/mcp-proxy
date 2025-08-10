@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
@@ -19,10 +20,10 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 				deps.Logger.Info("AUTH_ME_INIT",
 					"method", r.Method,
 					"path", r.URL.Path,
-					"user_id", GetUserID(r),
+					"user_id", ck.GetUserIDFromContext(r.Context()),
 				)
 			}
-			uid := GetUserID(r)
+			uid := ck.GetUserIDFromContext(r.Context())
 			if uid == "" {
 				if deps.Logger != nil {
 					deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
@@ -197,7 +198,8 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 	// logout
 	r.HandleFunc(cfg.AdminPrefix+"/auth/logout",
 		func(w http.ResponseWriter, r *http.Request) {
-			deps.Logger.Info("AUTH_LOGOUT_INIT", "user_id", GetUserID(r))
+			deps.Logger.Info("AUTH_LOGOUT_INIT",
+				"user_id", ck.GetUserIDFromContext(r.Context()))
 			http.SetCookie(w, &http.Cookie{
 				Name:     "session",
 				Value:    "",
@@ -209,6 +211,7 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			})
 
 			w.WriteHeader(http.StatusNoContent)
-			deps.Logger.Info("AUTH_LOGOUT_SUCCESS", "user_id", GetUserID(r))
+			deps.Logger.Info("AUTH_LOGOUT_SUCCESS",
+				"user_id", ck.GetUserIDFromContext(r.Context()))
 		}).Methods(http.MethodPost)
 }

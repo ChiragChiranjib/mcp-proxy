@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS mcp_tools (
   UNIQUE KEY uq_user_modified (user_id, modified_name),
   INDEX idx_tools_user (user_id),
   INDEX idx_tools_hub (mcp_hub_server_id),
-  INDEX idx_tools_status (status)
+  INDEX idx_tools_status (status),
+  INDEX idx_tools_user_hub (user_id, mcp_hub_server_id),
+  INDEX idx_tools_user_status (user_id, status),
+  INDEX idx_tools_hub_status (mcp_hub_server_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 	return err

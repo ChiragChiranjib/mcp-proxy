@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS mcp_virtual_servers (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_vs_user (user_id),
-  INDEX idx_vs_status (status)
+  INDEX idx_vs_status (status),
+  INDEX idx_vs_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 	return err

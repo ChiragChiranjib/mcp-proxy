@@ -1,0 +1,49 @@
+# Multi-stage build for MCP Gateway backend
+# Usage:
+#   docker build -f build/Dockerfile.backend -t mcp-gateway:latest .
+#   docker run --rm -p 8080:8080 -p 8082:8082 mcp-gateway:latest
+
+FROM golang:1.22-alpine as builder
+WORKDIR /src
+
+# Enable Go modules and better caching
+ENV CGO_ENABLED=0 \
+    GO111MODULE=on
+
+# Pre-copy go.mod and go.sum to leverage layer caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the source
+COPY . .
+
+# Build the gateway binary
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags "-s -w" -o /out/mcp-gateway ./cmd/mcp-gateway
+
+#
+# Runtime image
+#
+FROM alpine:3.20
+WORKDIR /app
+
+# Add non-root user and required runtime packages (TLS certs, tzdata)
+RUN addgroup -S app && adduser -S app -G app \
+    && apk add --no-cache ca-certificates tzdata \
+    && update-ca-certificates || true
+
+# Copy binary and configs
+COPY --from=builder /out/mcp-gateway /app/mcp-gateway
+COPY config/ /app/config/
+
+# Default environment (override at runtime)
+ENV APP_ENV=dev \
+    MCP_MODE=streamable-http
+
+EXPOSE 8080 8082
+
+USER app:app
+ENTRYPOINT ["/app/mcp-gateway"]
+
+
