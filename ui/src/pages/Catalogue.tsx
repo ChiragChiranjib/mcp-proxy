@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { notifyError, notifySuccess } from '../components/ToastHost'
 import { api, CatalogServer } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 
@@ -73,8 +74,10 @@ function AddToHubButton({ serverId, added, onAdded }: { serverId: string, added?
       if (authType === 'custom_headers') val = JSON.parse(authValue || '{}')
       await api.addHub({ mcp_server_id: serverId, transport: 'streamable-http', capabilities: null, auth_type: authType, auth_value: val })
       setOpen(false)
+      notifySuccess('Added to hub')
     } catch (e:any) {
       setError(e.message || String(e))
+      notifyError(e?.message || 'Failed to add to hub')
     } finally { setSaving(false) }
   }
 

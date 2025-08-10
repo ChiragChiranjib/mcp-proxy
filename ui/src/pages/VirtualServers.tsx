@@ -66,30 +66,41 @@ export function VirtualServers() {
   }, [createOpen])
 
   const openToolPicker = async (vs: VirtualServer) => {
-    const qp = new URLSearchParams()
-    const [toolsRes, hubsRes, catRes] = await Promise.all([
-      api.listTools(qp), api.listHubs(), api.listCatalog()
-    ])
-    setTools(toolsRes.items)
-    setHubs(hubsRes.items)
-    setCatalog(catRes.items)
-    setSelected([])
-    // preselect current vs tools
     try {
-      const cur = await api.listVSTools(vs.id)
-      setSelected(cur.items.map(t=>t.id))
-    } catch { setSelected([]) }
-    ;(document.getElementById('picker-'+vs.id) as HTMLDialogElement).showModal()
+      const qp = new URLSearchParams()
+      const [toolsRes, hubsRes, catRes] = await Promise.all([
+        api.listTools(qp), api.listHubs(), api.listCatalog()
+      ])
+      setTools(toolsRes.items)
+      setHubs(hubsRes.items)
+      setCatalog(catRes.items)
+      setSelected([])
+      // preselect current vs tools
+      try {
+        const cur = await api.listVSTools(vs.id)
+        setSelected(cur.items.map(t=>t.id))
+      } catch {
+        setSelected([])
+      }
+      ;(document.getElementById('picker-'+vs.id) as HTMLDialogElement).showModal()
+    } catch (e:any) {
+      notifyError(e?.message || 'Failed to load data')
+    }
   }
 
   const saveSelection = async (vs: VirtualServer) => {
-    await api.replaceVSTools(vs.id, selected)
-    ;(document.getElementById('picker-'+vs.id) as HTMLDialogElement).close()
-    // refresh visible tools for this VS
     try {
-      const res = await api.listVSTools(vs.id)
-      setToolsByVS(s => ({ ...s, [vs.id]: res.items }))
-    } catch {}
+      await api.replaceVSTools(vs.id, selected)
+      ;(document.getElementById('picker-'+vs.id) as HTMLDialogElement).close()
+      // refresh visible tools for this VS
+      try {
+        const res = await api.listVSTools(vs.id)
+        setToolsByVS(s => ({ ...s, [vs.id]: res.items }))
+      } catch {}
+      notifySuccess('Tools updated')
+    } catch (e:any) {
+      notifyError(e?.message || 'Failed to update tools')
+    }
   }
 
   const ensureVSToolsLoaded = async (vsId: string) => {
@@ -97,7 +108,9 @@ export function VirtualServers() {
     try {
       const res = await api.listVSTools(vsId)
       setToolsByVS(s => ({ ...s, [vsId]: res.items }))
-    } catch {}
+    } catch (e:any) {
+      notifyError(e?.message || 'Failed to load tools')
+    }
   }
 
   const toggleShowTools = async (vsId: string) => {
@@ -176,8 +189,8 @@ export function VirtualServers() {
             </div>
             <div className="mt-3 flex gap-2">
               <button onClick={()=>openToolPicker(vs)} className="text-sm px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/30 active:scale-95 transition">Manage Tools</button>
-              <button onClick={()=>api.setVSStatus(vs.id, vs.status==='ACTIVE'?'DEACTIVATED':'ACTIVE').then(load)} className="text-sm px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/30 active:scale-95 transition">{vs.status==='ACTIVE'?'Deactivate':'Activate'}</button>
-              <button onClick={()=>api.deleteVS(vs.id).then(load)} className="text-sm px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500/30 active:scale-95 transition">Delete</button>
+              <button onClick={async()=>{ try { await api.setVSStatus(vs.id, vs.status==='ACTIVE'?'DEACTIVATED':'ACTIVE'); load() } catch(e:any){ notifyError(e?.message||'Failed to update status') } }} className="text-sm px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/30 active:scale-95 transition">{vs.status==='ACTIVE'?'Deactivate':'Activate'}</button>
+              <button onClick={async()=>{ try { await api.deleteVS(vs.id); load() } catch(e:any){ notifyError(e?.message||'Failed to delete') } }} className="text-sm px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500/30 active:scale-95 transition">Delete</button>
             </div>
 
             {/* VS Tools chips */}
@@ -195,9 +208,14 @@ export function VirtualServers() {
                     </span>
                     <button
                       onClick={async ()=>{
-                        await api.removeVSTool(vs.id, t.id)
-                        const res = await api.listVSTools(vs.id)
-                        setToolsByVS(s=>({ ...s, [vs.id]: res.items }))
+                        try {
+                          await api.removeVSTool(vs.id, t.id)
+                          const res = await api.listVSTools(vs.id)
+                          setToolsByVS(s=>({ ...s, [vs.id]: res.items }))
+                          notifySuccess('Removed')
+                        } catch(e:any) {
+                          notifyError(e?.message || 'Failed to remove tool')
+                        }
                       }}
                       className="ml-1 grid place-items-center w-5 h-5 text-[13px] text-slate-400 hover:text-slate-100 focus:outline-none"
                       title="Remove from virtual server"
