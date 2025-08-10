@@ -18,9 +18,13 @@ export function AppLayout() {
     // Check session on load
     hydrateBasicCredentials()
     api.me().then((m) => {
-      // we don't get full profile; read cached email if present
-      const cached = localStorage.getItem('user-email') || undefined
-      setUser({ email: cached, userId: (m as any).user_id })
+      const serverEmail = (m as any)?.email as string | undefined
+      if (serverEmail) {
+        try { localStorage.setItem('user-email', serverEmail) } catch {}
+      }
+      const fallback = localStorage.getItem('user-email') || getBasicUsername() || undefined
+      const email = serverEmail || fallback
+      setUser({ email, userId: (m as any).user_id })
     }).catch(() => {
       setUser(null)
     }).finally(() => setAuthChecked(true))
@@ -149,7 +153,7 @@ function UserMenu({ email, onLogout }: { email: string; onLogout: ()=>void }) {
       {open && (
         <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/15 bg-black/90 backdrop-blur p-3 shadow-2xl">
           <div className="text-xs text-slate-400 mb-1">Signed in as</div>
-          <div className="text-sm break-all">{email || username || (typeof window !== 'undefined' ? (window as any).USER_ID : '') || 'unknown'}</div>
+          <div className="text-sm break-all">{email || username || 'unknown'}</div>
           <div className="mt-3 flex justify-end">
             <button
               className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500/30 active:scale-95 transition"
