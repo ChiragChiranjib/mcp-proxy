@@ -4,11 +4,12 @@ import (
 	"net/http"
 	"time"
 
-	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
-	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"google.golang.org/api/idtoken"
+
+	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
+	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 )
 
 // addAuthRoutes configures SSO endpoints.
