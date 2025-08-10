@@ -26,7 +26,8 @@ func NewService(opts ...Option) *Service {
 	return s
 }
 
-func (s *Service) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+func (s *Service) withTimeout(
+	ctx context.Context) (context.Context, context.CancelFunc) {
 	if s.timeout <= 0 {
 		return ctx, func() {}
 	}
@@ -37,8 +38,12 @@ func (s *Service) withTimeout(ctx context.Context) (context.Context, context.Can
 func (s *Service) Add(ctx context.Context, h m.MCPHubServer) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
-	s.logger.Info("MCP_HUB_ADD_INIT", "id", h.ID, "user_id", h.UserID, "mcp_server_id", h.MCPServerID)
-	err := s.repo.AddHubServer(ctx, h)
+	s.logger.Info("MCP_HUB_ADD_INIT",
+		"id", h.ID,
+		"user_id", h.UserID,
+		"mcp_server_id", h.MCPServerID,
+	)
+	err := s.repo.CreateMCPHubServer(ctx, h)
 	if err != nil {
 		s.logger.Error("MCP_HUB_ADD_ERROR", "error", err)
 		return err
@@ -52,7 +57,7 @@ func (s *Service) Get(ctx context.Context, id string) (m.MCPHubServer, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	s.logger.Info("MCP_HUB_GET_INIT", "id", id)
-	r, err := s.repo.GetHubServer(ctx, id)
+	r, err := s.repo.GetHubServerByID(ctx, id)
 	if err != nil {
 		s.logger.Error("MCP_HUB_GET_ERROR", "error", err)
 		return m.MCPHubServer{}, err
@@ -79,7 +84,8 @@ func (s *Service) ListForUser(
 }
 
 // SetStatus updates hub server status.
-func (s *Service) SetStatus(ctx context.Context, id string, status string) error {
+func (s *Service) SetStatus(
+	ctx context.Context, id string, status string) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	s.logger.Info("MCP_HUB_SET_STATUS_INIT", "id", id, "status", status)
@@ -93,7 +99,8 @@ func (s *Service) SetStatus(ctx context.Context, id string, status string) error
 }
 
 // GetWithURL fetches hub with resolved server url and name.
-func (s *Service) GetWithURL(ctx context.Context, id string) (repo.HubWithURL, error) {
+func (s *Service) GetWithURL(
+	ctx context.Context, id string) (repo.HubWithURL, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	s.logger.Info("MCP_HUB_GET_WITH_URL_INIT", "id", id)

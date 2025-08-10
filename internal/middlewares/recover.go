@@ -12,7 +12,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Error("panic", "recover", rec)
+					logger.Error("PANIC_LOG", "recover", rec)
 					w.WriteHeader(http.StatusInternalServerError)
 				}
 			}()

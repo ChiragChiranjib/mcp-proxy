@@ -120,7 +120,7 @@ func (s *Service) CreateWithTools(
 		toolIDs = toolIDs[:50]
 	}
 
-	id := "vs_" + idgen.NewID()
+	id := idgen.NewID()
 
 	// Run in a transaction
 	err := s.repo.Transaction(func(tx *repo.Repo) error {

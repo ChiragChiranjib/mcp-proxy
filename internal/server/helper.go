@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	ck "github.com/ChiragChiranjib/mcp-proxy/internal/contextkey"
+	ic "github.com/ChiragChiranjib/mcp-proxy/internal/httpclient"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
-	ic "github.com/ChiragChiranjib/mcp-proxy/internal/server/httpclient"
 	mclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -71,44 +71,8 @@ func CreateMCPTool(t m.MCPTool) mcp.Tool {
 	return tool
 }
 
-// buildUpstreamHeaders prepares Authorization/custom headers, with AES decryption
-// when bearer token is stored encrypted as JSON.
-func buildUpstreamHeaders(deps Deps, hub *m.MCPHubServer) map[string]string {
-	deps.Logger.Info(
-		"BUILD_UPSTREAM_HEADERS_INIT",
-		"hub_id", hub.ID,
-		"auth_type", string(hub.AuthType),
-	)
-	headers := map[string]string{}
-	switch hub.AuthType {
-	case m.AuthTypeBearer:
-		token := string(hub.AuthValue)
-		if deps.Encrypter != nil && len(hub.AuthValue) > 0 && hub.AuthValue[0] == '{' {
-			if b, err := deps.Encrypter.DecryptFromJSON(hub.AuthValue); err == nil {
-				token = string(b)
-				deps.Logger.Info("DECRYPT_BEARER_TOKEN_OK", "len", len(token))
-			} else {
-				deps.Logger.Error("DECRYPT_BEARER_TOKEN_ERROR", "error", err)
-			}
-		}
-		headers["Authorization"] = "Bearer " + token
-	case m.AuthTypeCustomHeaders:
-		var hdrs map[string]string
-		if err := json.Unmarshal(hub.AuthValue, &hdrs); err != nil {
-			deps.Logger.Error("CUSTOM_HEADERS_DECODE_ERROR", "error", err)
-		} else {
-			for k, v := range hdrs {
-				headers[k] = v
-			}
-			deps.Logger.Info("CUSTOM_HEADERS_APPLIED", "count", len(headers))
-		}
-	default:
-		deps.Logger.Info("NO_AUTH_HEADERS_APPLIED")
-	}
-	return headers
-}
-
-// callUpstreamTool performs the upstream MCP tool call via mcp-go and returns result.
+// callUpstreamTool performs the upstream MCP tool call
+// via mcp-go and returns result.
 func callUpstreamTool(
 	ctx context.Context,
 	deps Deps,

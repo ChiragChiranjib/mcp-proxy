@@ -1,10 +1,10 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"time"
 
+	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"google.golang.org/api/idtoken"
@@ -13,215 +13,202 @@ import (
 // addAuthRoutes configures SSO endpoints.
 func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 	// get current session info (if any)
-	r.HandleFunc(cfg.AdminPrefix+"/auth/me", func(w http.ResponseWriter, r *http.Request) {
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_ME_INIT",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"user_id", GetUserID(r),
-			)
-		}
-		uid := GetUserID(r)
-		if uid == "" {
+	r.HandleFunc(cfg.AdminPrefix+"/auth/me",
+		func(w http.ResponseWriter, r *http.Request) {
 			if deps.Logger != nil {
-				deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
+				deps.Logger.Info("AUTH_ME_INIT",
+					"method", r.Method,
+					"path", r.URL.Path,
+					"user_id", GetUserID(r),
+				)
 			}
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_ME_OK", "user_id", uid)
-		}
-		WriteJSON(w, http.StatusOK, map[string]string{"user_id": uid})
-	}).Methods(http.MethodGet)
+			uid := GetUserID(r)
+			if uid == "" {
+				if deps.Logger != nil {
+					deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
+				}
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("AUTH_ME_OK", "user_id", uid)
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"user_id": uid})
+		}).Methods(http.MethodGet)
 	// exchange Google ID token for app session
-	r.HandleFunc(cfg.AdminPrefix+"/auth/google", func(w http.ResponseWriter, r *http.Request) {
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_GOOGLE_INIT",
-				"method", r.Method,
-				"path", r.URL.Path,
-			)
-		}
-		var body struct {
-			Credential string `json:"credential"`
-		}
-		if !ReadJSON(w, r, &body) {
+	r.HandleFunc(cfg.AdminPrefix+"/auth/google",
+		func(w http.ResponseWriter, r *http.Request) {
 			if deps.Logger != nil {
+				deps.Logger.Info("AUTH_GOOGLE_INIT",
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
+			}
+			var body struct {
+				Credential string `json:"credential"`
+			}
+			if !ReadJSON(w, r, &body) {
 				deps.Logger.Error("AUTH_GOOGLE_READ_BODY_ERROR")
+				return
 			}
-			return
-		}
-		if body.Credential == "" {
-			if deps.Logger != nil {
+			if body.Credential == "" {
 				deps.Logger.Error("AUTH_GOOGLE_MISSING_CREDENTIAL")
+				WriteJSON(w, http.StatusBadRequest,
+					map[string]string{"error": "missing credential"})
+				return
 			}
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing credential"})
-			return
-		}
-		// verify ID token
-		clientID := ""
-		if deps.AppConfig != nil {
-			clientID = deps.AppConfig.Google.ClientID
-		}
-		payload, err := idtoken.Validate(r.Context(), body.Credential, clientID)
-		if err != nil {
-			if deps.Logger != nil {
+			// verify ID token
+			clientID := ""
+			if deps.AppConfig != nil {
+				clientID = deps.AppConfig.Google.ClientID
+			}
+			payload, err := idtoken.Validate(r.Context(), body.Credential, clientID)
+			if err != nil {
 				deps.Logger.Error("AUTH_GOOGLE_VALIDATE_ERROR", "error", err)
+				WriteJSON(w, http.StatusUnauthorized,
+					map[string]string{"error": "invalid google token"})
+				return
 			}
-			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid google token"})
-			return
-		}
-		email, _ := payload.Claims["email"].(string)
-		name, _ := payload.Claims["name"].(string)
-		if email == "" {
-			if deps.Logger != nil {
+			email, _ := payload.Claims["email"].(string)
+			name, _ := payload.Claims["name"].(string)
+			if email == "" {
 				deps.Logger.Error("AUTH_GOOGLE_EMAIL_MISSING")
+				WriteJSON(w, http.StatusUnauthorized,
+					map[string]string{"error": "email missing"})
+				return
 			}
-			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "email missing"})
-			return
-		}
 
-		uid := ensureUser(r.Context(), deps, email)
-		role := "user"
-		adminID := ""
-		if deps.AppConfig != nil {
-			adminID = deps.AppConfig.Security.AdminUserID
-		}
-		if adminID != "" && (uid == adminID || email == adminID) {
-			role = "admin"
-		}
-		// build app jwt
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"uid":   uid,
-			"email": email,
-			"name":  name,
-			"role":  role,
-			"exp":   time.Now().Add(60 * time.Minute).Unix(),
-			"iat":   time.Now().Unix(),
-		})
-		secret := ""
-		if deps.AppConfig != nil {
-			secret = deps.AppConfig.Security.JWTSecret
-		}
-		s, err := token.SignedString([]byte(secret))
-		if err != nil {
-			if deps.Logger != nil {
+			user, err := deps.UserService.FetchOrCreateByUsername(r.Context(), email)
+			if err != nil {
 				deps.Logger.Error("AUTH_GOOGLE_TOKEN_ERROR", "error", err)
+				WriteJSON(w, http.StatusInternalServerError,
+					map[string]string{"error": "authorization failed."})
+				return
 			}
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
-			return
-		}
-		// set cookie
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: s, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 3600})
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_GOOGLE_OK", "user_id", uid)
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid, "email": email, "name": name})
-	}).Methods(http.MethodPost)
+
+			// build JWT Token
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"email":    email,
+				"uid":      user.ID,
+				"username": user.Username,
+				"role":     user.Role,
+				"auth":     "sso",
+				"exp":      time.Now().Add(120 * time.Minute).Unix(),
+				"iat":      time.Now().Unix(),
+			})
+
+			s, err := token.SignedString([]byte(deps.AppConfig.Security.JWTSecret))
+			if err != nil {
+				deps.Logger.Error("AUTH_GOOGLE_TOKEN_ERROR", "error", err)
+				WriteJSON(w, http.StatusInternalServerError,
+					map[string]string{"error": "token error"})
+				return
+			}
+
+			// set cookie
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session",
+				Value:    s,
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+				Secure:   false,
+				MaxAge:   3600,
+			})
+
+			deps.Logger.Info("AUTH_GOOGLE_OK", "user_id", user.ID)
+			WriteJSON(w, http.StatusOK,
+				map[string]any{"user_id": user.ID, "email": email, "name": name})
+		}).Methods(http.MethodPost)
 
 	// username/password basic login → sets JWT session cookie
-	r.HandleFunc(cfg.AdminPrefix+"/auth/basic", func(w http.ResponseWriter, r *http.Request) {
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_BASIC_INIT",
-				"method", r.Method,
-				"path", r.URL.Path,
-			)
-		}
-		type req struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
-		var b req
-		if !ReadJSON(w, r, &b) {
-			if deps.Logger != nil {
+	r.HandleFunc(cfg.AdminPrefix+"/auth/basic",
+		func(w http.ResponseWriter, r *http.Request) {
+			deps.Logger.Info("AUTH_BASIC_INIT", "method", r.Method, "path", r.URL.Path)
+
+			var req struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}
+			if !ReadJSON(w, r, &req) {
 				deps.Logger.Error("AUTH_BASIC_READ_BODY_ERROR")
+				return
 			}
-			return
-		}
-		if b.Username == "" || b.Password == "" {
-			if deps.Logger != nil {
+			if req.Username == "" || req.Password == "" {
 				deps.Logger.Error("AUTH_BASIC_MISSING_CREDENTIALS")
+				WriteJSON(w, http.StatusBadRequest,
+					map[string]string{"error": "missing credentials"})
+				return
 			}
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing credentials"})
-			return
-		}
 
-		if b.Username != "" {
-			// compare with configured credentials stored in server deps via user service accessor
-		}
-
-		if !validateBasic(deps, b.Username, b.Password) {
-			if deps.Logger != nil {
+			if req.Username != deps.AppConfig.Security.BasicUsername ||
+				req.Password != deps.AppConfig.Security.BasicPassword {
 				deps.Logger.Error("AUTH_BASIC_INVALID_CREDENTIALS")
+				WriteJSON(w, http.StatusUnauthorized,
+					map[string]string{"error": "invalid credentials"})
+				return
 			}
-			WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
-			return
-		}
-		// ensure user exists and use canonical internal id
-		uid := ensureUser(r.Context(), deps, b.Username)
-		role := "user"
-		adminID := ""
-		if deps.AppConfig != nil {
-			adminID = deps.AppConfig.Security.AdminUserID
-		}
-		if adminID != "" && (uid == adminID || b.Username == adminID) {
-			role = "admin"
-		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"uid":   uid,
-			"email": uid,
-			"role":  role,
-			"exp":   time.Now().Add(60 * time.Minute).Unix(),
-			"iat":   time.Now().Unix(),
-		})
-		secret := ""
-		if deps.AppConfig != nil {
-			secret = deps.AppConfig.Security.JWTSecret
-		}
-		s, err := token.SignedString([]byte(secret))
-		if err != nil {
-			if deps.Logger != nil {
-				deps.Logger.Error("AUTH_BASIC_TOKEN_ERROR", "error", err)
+
+			userEntity, err := deps.UserService.FindUserByUserName(
+				r.Context(), req.Username)
+			if err != nil || userEntity.Role != string(m.RoleAdmin) {
+				WriteJSON(w, http.StatusUnauthorized,
+					map[string]string{"error": "invalid credentials"})
+				http.Error(w, "unauthorized user", http.StatusUnauthorized)
+				return
 			}
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
-			return
-		}
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: s, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 3600})
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_BASIC_OK", "user_id", uid)
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"user_id": uid, "email": uid})
-	}).Methods(http.MethodPost)
+
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"email":    userEntity.Username,
+				"uid":      userEntity.ID,
+				"username": userEntity.Username,
+				"role":     userEntity.Role,
+				"auth":     "basic",
+				"exp":      time.Now().Add(120 * time.Minute).Unix(),
+				"iat":      time.Now().Unix(),
+			})
+			secret := ""
+			if deps.AppConfig != nil {
+				secret = deps.AppConfig.Security.JWTSecret
+			}
+			s, err := token.SignedString([]byte(secret))
+			if err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("AUTH_BASIC_TOKEN_ERROR", "error", err)
+				}
+				WriteJSON(w, http.StatusInternalServerError,
+					map[string]string{"error": "token error"})
+				return
+			}
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session",
+				Value:    s,
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+				Secure:   false,
+				MaxAge:   3600,
+			})
+			deps.Logger.Info("AUTH_BASIC_OK", "user_id", userEntity.ID)
+			WriteJSON(w, http.StatusOK,
+				map[string]any{"user_id": userEntity.ID, "username": userEntity.Username})
+		}).Methods(http.MethodPost)
 
 	// logout
-	r.HandleFunc(cfg.AdminPrefix+"/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		if deps.Logger != nil {
+	r.HandleFunc(cfg.AdminPrefix+"/auth/logout",
+		func(w http.ResponseWriter, r *http.Request) {
 			deps.Logger.Info("AUTH_LOGOUT_INIT", "user_id", GetUserID(r))
-		}
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, MaxAge: 0})
-		w.WriteHeader(http.StatusNoContent)
-		if deps.Logger != nil {
-			deps.Logger.Info("AUTH_LOGOUT_OK")
-		}
-	}).Methods(http.MethodPost)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session",
+				Value:    "",
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+				Secure:   false,
+				MaxAge:   0,
+			})
 
-}
-
-// validateBasic compares provided credentials to configured ones.
-func validateBasic(deps Deps, username, password string) bool {
-	if deps.AppConfig == nil || deps.AppConfig.Security.BasicUsername == "" {
-		return false
-	}
-	return username == deps.AppConfig.Security.BasicUsername && password == deps.AppConfig.Security.BasicPassword
-}
-
-// ensureUser creates a user record if missing. For brevity, this is a placeholder where you would
-// call the repo Users methods. Here we no-op to keep the example focused.
-func ensureUser(ctx context.Context, deps Deps, email string) string {
-	if deps.UserService != nil {
-		if id, err := deps.UserService.GetOrCreateByEmail(ctx, email); err == nil && id != "" {
-			return id
-		}
-	}
-	return email
+			w.WriteHeader(http.StatusNoContent)
+			deps.Logger.Info("AUTH_LOGOUT_SUCCESS", "user_id", GetUserID(r))
+		}).Methods(http.MethodPost)
 }

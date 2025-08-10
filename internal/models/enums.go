@@ -1,6 +1,7 @@
 package models
 
-// Status represents the lifecycle status of entities like tools, hubs, and virtual servers.
+// Status represents the lifecycle status of
+// entities like tools, hubs, and virtual servers.
 type Status string
 
 const (

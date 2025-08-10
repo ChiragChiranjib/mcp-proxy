@@ -17,7 +17,8 @@ import (
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
 )
 
-// Orchestrator wires the client with services and DB for transactional workflows.
+// Orchestrator wires the client with services and DB for
+// transactional workflows.
 type Orchestrator struct {
 	hubs   *mcphub.Service
 	tools  *tool.Service
@@ -36,42 +37,41 @@ type CreateMCPHubServer struct {
 }
 
 // New creates an orchestrator.
-func New(hubs *mcphub.Service, tools *tool.Service, r *repo.Repo, logger *slog.Logger, encr *encryptor.AESEncrypter) *Orchestrator {
-	return &Orchestrator{hubs: hubs, tools: tools, repo: r, logger: logger, encr: encr}
+func New(
+	hubs *mcphub.Service,
+	tools *tool.Service,
+	r *repo.Repo,
+	logger *slog.Logger,
+	encr *encryptor.AESEncrypter,
+) *Orchestrator {
+	return &Orchestrator{
+		hubs:   hubs,
+		tools:  tools,
+		repo:   r,
+		logger: logger,
+		encr:   encr,
+	}
 }
 
-// AddHub creates a hub and its tools atomically after discovering capabilities and tools.
-func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (string, error) {
+// AddHub creates a hub and its tools atomically
+// after discovering capabilities and tools.
+func (o *Orchestrator) AddHub(
+	ctx context.Context, req CreateMCPHubServer) (string, error) {
 	o.logger.Info("ORCH_ADD_HUB_INIT",
 		"user_id", req.UserID,
 		"mcp_server_id", req.MCPServerID,
 		"transport", req.Transport,
 	)
-	// Resolve MCP server URL and name from catalog
-	var srv m.MCPServer
-	if err := o.repo.WithContext(ctx).Where("id = ?", req.MCPServerID).Take(&srv).Error; err != nil {
+	// Resolve MCP server URL and name from catalog via repo
+	srv, err := o.repo.GetCatalogServerByID(ctx, req.MCPServerID)
+	if err != nil {
 		o.logger.Error("ORCH_RESOLVE_SERVER_ERROR", "error", err)
 		return "", err
 	}
 	serverURL := srv.URL
 	serverName := srv.Name
-	o.logger.Info("ORCH_RESOLVE_SERVER_OK", "server_name", serverName, "server_url_len", len(serverURL))
-
-	// Fetch capabilities via init and tools via client
-	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL)
-	caps, err := mcpclient.InitCapabilities(ctx, serverURL)
-	if err != nil {
-		o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
-		return "", err
-	}
-	o.logger.Info("ORCH_INIT_CAPABILITIES_OK", "len", len(caps))
-	o.logger.Info("ORCH_LIST_TOOLS_INIT")
-	toolsRes, err := mcpclient.ListTools(ctx, serverURL)
-	if err != nil {
-		o.logger.Error("ORCH_LIST_TOOLS_ERROR", "error", err)
-		return "", err
-	}
-	o.logger.Info("ORCH_LIST_TOOLS_OK", "tool_count", len(toolsRes.Tools))
+	o.logger.Info("ORCH_RESOLVE_SERVER_SUCCESS",
+		"server_name", serverName, "server_url_len", len(serverURL))
 
 	// Build hub model
 	hubID := idgen.NewID()
@@ -81,13 +81,34 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 		MCPServerID:  req.MCPServerID,
 		Status:       m.StatusActive,
 		Transport:    req.Transport,
-		Capabilities: caps,
+		Capabilities: nil,
 		AuthType:     req.AuthType,
 		AuthValue:    req.AuthValue,
 	}
 
+	headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &hub)
+
+	// Fetch capabilities via init and tools via client
+	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL)
+	caps, err := mcpclient.InitCapabilities(ctx, serverURL, headers)
+	if err != nil {
+		o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
+		return "", err
+	}
+	hub.Capabilities = caps
+	o.logger.Info("ORCH_INIT_CAPABILITIES_SUCCESS", "len", len(caps))
+
+	o.logger.Info("ORCH_LIST_TOOLS_INIT")
+	toolsRes, err := mcpclient.ListTools(ctx, serverURL, headers)
+	if err != nil {
+		o.logger.Error("ORCH_LIST_TOOLS_ERROR", "error", err)
+		return "", err
+	}
+	o.logger.Info("ORCH_LIST_TOOLS_SUCCESS", "tool_count", len(toolsRes.Tools))
+
 	// Encrypt bearer token if provided
-	if req.AuthType == m.AuthTypeBearer && len(req.AuthValue) > 0 && o.encr != nil {
+	if req.AuthType == m.AuthTypeBearer &&
+		len(req.AuthValue) > 0 && o.encr != nil {
 		o.logger.Info("ORCH_ENCRYPT_BEARER_INIT")
 		enc, err := o.encr.EncryptToJSON(req.AuthValue)
 		if err != nil {
@@ -95,7 +116,7 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 			return "", err
 		}
 		hub.AuthValue = enc
-		o.logger.Info("ORCH_ENCRYPT_BEARER_OK", "len", len(enc))
+		o.logger.Info("ORCH_ENCRYPT_BEARER_SUCCESS", "len", len(enc))
 	}
 
 	// Build tool models
@@ -115,7 +136,7 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 			Status:         m.StatusActive,
 		})
 	}
-	o.logger.Info("ORCH_BUILD_TOOL_MODELS_OK", "count", len(toolModels))
+	o.logger.Info("ORCH_BUILD_TOOL_MODELS_SUCCESS", "count", len(toolModels))
 
 	// Transaction: create hub and its tools
 	o.logger.Info("ORCH_ADD_HUB_TX_BEGIN")
@@ -134,7 +155,8 @@ func (o *Orchestrator) AddHub(ctx context.Context, req CreateMCPHubServer) (stri
 		o.logger.Error("ORCH_ADD_HUB_TX_ERROR", "error", err)
 		return "", err
 	}
-	o.logger.Info("ORCH_ADD_HUB_OK", "hub_id", hubID, "tool_count", len(toolModels))
+	o.logger.Info("ORCH_ADD_HUB_SUCCESS",
+		"hub_id", hubID, "tool_count", len(toolModels))
 	return hubID, nil
 }
 
@@ -151,15 +173,17 @@ func (o *Orchestrator) RefreshHub(
 		o.logger.Error("ORCH_REFRESH_GET_WITH_URL_ERROR", "error", err)
 		return nil, nil, err
 	}
+
 	serverURL := info.ServerURL
 	serverName := info.ServerName
 	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_INIT")
-	res, err := mcpclient.ListTools(ctx, serverURL)
+	headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &info.MCPHubServer)
+	res, err := mcpclient.ListTools(ctx, serverURL, headers)
 	if err != nil {
 		o.logger.Error("ORCH_REFRESH_LIST_TOOLS_ERROR", "error", err)
 		return nil, nil, err
 	}
-	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_OK", "tool_count", len(res.Tools))
+	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_SUCCESS", "tool_count", len(res.Tools))
 
 	// Desired set
 	desired := make(map[string]mcp.Tool)
@@ -176,7 +200,8 @@ func (o *Orchestrator) RefreshHub(
 		o.logger.Error("ORCH_REFRESH_DB_LOAD_TOOLS_ERROR", "error", err)
 		return nil, nil, err
 	}
-	o.logger.Info("ORCH_REFRESH_DB_LOAD_TOOLS_OK", "current_count", len(current))
+	o.logger.Info("ORCH_REFRESH_DB_LOAD_TOOLS_SUCCESS",
+		"current_count", len(current))
 	currentSet := make(map[string]m.MCPTool)
 	for _, t := range current {
 		currentSet[t.ModifiedName] = t
@@ -184,10 +209,10 @@ func (o *Orchestrator) RefreshHub(
 
 	// Compute to-add and to-remove
 	var toInsert []m.MCPTool
-	for name, tool := range desired {
+	for name, dtool := range desired {
 		if _, ok := currentSet[name]; !ok {
 
-			annotationsJSON, err := json.Marshal(tool.Annotations)
+			annotationsJSON, err := json.Marshal(dtool.Annotations)
 			if err != nil {
 				o.logger.Error("ORCH_REFRESH_ANNOTATIONS_MARSHALL_ERROR",
 					"error", err)
@@ -196,11 +221,11 @@ func (o *Orchestrator) RefreshHub(
 			toInsert = append(toInsert, m.MCPTool{
 				ID:             idgen.NewID(),
 				UserID:         userID,
-				OriginalName:   tool.Name,
-				ModifiedName:   serverName + "-" + tool.Name,
+				OriginalName:   dtool.Name,
+				ModifiedName:   serverName + "-" + dtool.Name,
 				MCPHubServerID: hubID,
-				Description:    tool.Description,
-				InputSchema:    tool.RawInputSchema,
+				Description:    dtool.Description,
+				InputSchema:    dtool.RawInputSchema,
 				Annotations:    annotationsJSON,
 				Status:         m.StatusActive,
 			})
@@ -215,7 +240,8 @@ func (o *Orchestrator) RefreshHub(
 	}
 
 	// Apply changes transactionally
-	o.logger.Info("ORCH_REFRESH_TX_BEGIN", "to_add", len(toInsert), "to_delete", len(toDeleteIDs))
+	o.logger.Info("ORCH_REFRESH_TX_BEGIN",
+		"to_add", len(toInsert), "to_delete", len(toDeleteIDs))
 	err = o.repo.Transaction(func(tx *repo.Repo) error {
 		if len(toInsert) > 0 {
 			if err := tx.WithContext(ctx).Create(&toInsert).Error; err != nil {
@@ -236,6 +262,7 @@ func (o *Orchestrator) RefreshHub(
 		return nil, nil, err
 	}
 	// return what was added and deleted
-	o.logger.Info("ORCH_REFRESH_OK", "added", len(toInsert), "deleted", len(deleted))
+	o.logger.Info("ORCH_REFRESH_SUCCESS",
+		"added", len(toInsert), "deleted", len(deleted))
 	return toInsert, deleted, nil
 }

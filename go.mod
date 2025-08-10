@@ -10,6 +10,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v0.2.0
 	github.com/pressly/goose/v3 v3.22.1
 	github.com/prometheus/client_golang v1.19.0
+	github.com/rs/xid v1.6.0
 	github.com/spf13/viper v1.20.1
 	google.golang.org/api v0.215.0
 	gorm.io/driver/mysql v1.6.0

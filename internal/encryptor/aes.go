@@ -40,7 +40,8 @@ func (a *AESEncrypter) Encrypt(plaintext []byte, nonce []byte) ([]byte, error) {
 }
 
 // Decrypt decrypts ciphertext with the provided nonce.
-func (a *AESEncrypter) Decrypt(ciphertext []byte, nonce []byte) ([]byte, error) {
+func (a *AESEncrypter) Decrypt(
+	ciphertext []byte, nonce []byte) ([]byte, error) {
 	if len(nonce) != a.gcm.NonceSize() {
 		return nil, fmt.Errorf("invalid nonce size")
 	}
@@ -48,7 +49,8 @@ func (a *AESEncrypter) Decrypt(ciphertext []byte, nonce []byte) ([]byte, error) 
 }
 
 // EncryptToJSON returns a JSON object with base64 nonce and cipher for payload.
-func (a *AESEncrypter) EncryptToJSON(payload json.RawMessage) (json.RawMessage, error) {
+func (a *AESEncrypter) EncryptToJSON(
+	payload json.RawMessage) (json.RawMessage, error) {
 	nonce := make([]byte, a.gcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
@@ -65,7 +67,7 @@ func (a *AESEncrypter) EncryptToJSON(payload json.RawMessage) (json.RawMessage, 
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // DecryptFromJSON expects base64 fields and returns decrypted bytes.

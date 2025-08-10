@@ -18,11 +18,10 @@ type ServerConfig struct {
 type SecurityConfig struct {
 	AESKey    string `mapstructure:"aes_key"`
 	JWTSecret string `mapstructure:"jwt_secret"`
+
 	// Optional basic auth credentials for admin login
 	BasicUsername string `mapstructure:"basic_username"`
 	BasicPassword string `mapstructure:"basic_password"`
-	// AdminUserID is the user id that should receive admin role in JWTs
-	AdminUserID string `mapstructure:"admin_user_id"`
 }
 
 // GoogleConfig holds Google Identity configuration.
@@ -63,9 +62,11 @@ func Load() (*Config, error) {
 	vp.SetConfigType("toml")
 	vp.AddConfigPath("./config")
 	vp.SetConfigFile(filepath.Join("./config", file))
+
 	if err := vp.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config %s: %w", file, err)
 	}
+
 	var cfg Config
 	if err := vp.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)

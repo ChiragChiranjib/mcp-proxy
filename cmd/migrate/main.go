@@ -12,11 +12,11 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pressly/goose/v3"
-
-	cfgpkg "github.com/ChiragChiranjib/mcp-proxy/internal/config"
-	_ "github.com/ChiragChiranjib/mcp-proxy/migrations"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+
+	"github.com/ChiragChiranjib/mcp-proxy/internal/config"
+	_ "github.com/ChiragChiranjib/mcp-proxy/migrations"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 )
 
 func main() {
-	cfg, err := cfgpkg.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
@@ -40,7 +40,8 @@ func main() {
 	if port == 0 {
 		port = 3306
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", cfg.DB.Username, cfg.DB.Password, host, port, cfg.DB.Name)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true",
+		cfg.DB.Username, cfg.DB.Password, host, port, cfg.DB.Name)
 	gdb, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("gorm open: %v", err)
@@ -103,7 +104,7 @@ func run(db *sql.DB, dir string) {
 
 func usage() {
 	flags.PrintDefaults()
-	fmt.Println(usageCommands)
+	fmt.Print(usageCommands)
 }
 
 var usageCommands = `

@@ -1,6 +1,22 @@
 [
-  {"name": "example-mcp", "url": "http://localhost:9000/mcp", "description": "Example MCP server"},
-  {"name": "go-sdk-hello", "url": "http://localhost:9001/mcp", "description": "go-sdk hello example"},
-  {"name": "razorpay-mcp", "url": "http://mcp.razorpay.com/mcp", "description": "Razorpay MCP server"},
-  {"name": "e2e-mcp", "url": "https://e2e-mcp-server.dev.razorpay.in/mcp", "description": "E2E MCP server"}
+  {
+    "name": "example-mcp",
+    "url": "http://localhost:9000/mcp",
+    "description": "Example MCP server"
+  },
+  {
+    "name": "go-sdk-hello",
+    "url": "http://localhost:9001/mcp",
+    "description": "go-sdk hello example"
+  },
+  {
+    "name": "razorpay-mcp",
+    "url": "http://mcp.razorpay.com/mcp",
+    "description": "Razorpay MCP server"
+  },
+  {
+    "name": "e2e-mcp-server",
+    "url": "https://e2e-mcp-server.dev.razorpay.in/mcp",
+    "description": "E2E MCP server"
+  }
 ]

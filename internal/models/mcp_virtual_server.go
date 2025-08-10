@@ -11,4 +11,7 @@ type MCPVirtualServer struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-func (MCPVirtualServer) TableName() string { return "mcp_virtual_servers" }
+// TableName ...
+func (MCPVirtualServer) TableName() string {
+	return "mcp_virtual_servers"
+}

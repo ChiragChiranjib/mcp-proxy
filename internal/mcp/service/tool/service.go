@@ -18,7 +18,8 @@ type Service struct {
 	timeout time.Duration
 }
 
-func (s *Service) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+func (s *Service) withTimeout(
+	ctx context.Context) (context.Context, context.CancelFunc) {
 	if s.timeout <= 0 {
 		return ctx, func() {}
 	}
@@ -49,7 +50,8 @@ func (s *Service) ListForVirtualServer(
 }
 
 // SetStatus updates a tool status by id.
-func (s *Service) SetStatus(ctx context.Context, id string, status string) error {
+func (s *Service) SetStatus(
+	ctx context.Context, id string, status string) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	return s.repo.WithContext(ctx).

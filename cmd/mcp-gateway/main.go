@@ -3,8 +3,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -106,11 +108,14 @@ func main() {
 	}
 
 	// Internal server for metrics and pprof
-	internalSrv, _ := newInternalServer()
+	internalSrv, err := newInternalServer()
+	if err != nil {
+		log.Fatalf("failed to start internal server: %v", err)
+	}
 
 	go func() {
 		logger.Info("http server starting", "port", cfg.Server.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) { //nolint:lll
 			logger.Error("http server", "error", err)
 			os.Exit(1)
 		}
@@ -118,7 +123,7 @@ func main() {
 
 	go func() {
 		logger.Info("internal server starting", "addr", internalSrv.Addr)
-		if err := internalSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := internalSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) { //nolint:lll
 			logger.Error("internal http server", "error", err)
 		}
 	}()

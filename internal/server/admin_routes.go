@@ -22,9 +22,11 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/catalog/servers",
 		func(w http.ResponseWriter, r *http.Request) {
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_CATALOG_SERVERS_INIT", "method", r.Method, "path", r.URL.Path)
-			}
+			deps.Logger.Info("LIST_CATALOG_SERVERS_INIT",
+				"method", r.Method,
+				"path", r.URL.Path,
+			)
+
 			items, err := deps.Catalog.List(r.Context())
 			if err != nil {
 				if deps.Logger != nil {
@@ -38,7 +40,7 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("LIST_CATALOG_SERVERS_OK", "count", len(items))
+				deps.Logger.Info("LIST_CATALOG_SERVERS_SUCCESS", "count", len(items))
 			}
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
@@ -73,7 +75,8 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 				if deps.Logger != nil {
 					deps.Logger.Error("CREATE_CATALOG_SERVER_MISSING_FIELDS")
 				}
-				WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing fields"})
+				WriteJSON(w, http.StatusBadRequest,
+					map[string]string{"error": "missing fields"})
 				return
 			}
 			rec := m.MCPServer{
@@ -86,13 +89,15 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 				if deps.Logger != nil {
 					deps.Logger.Error("CREATE_CATALOG_SERVER_DB_ERROR", "error", err)
 				}
-				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				WriteJSON(w, http.StatusInternalServerError,
+					map[string]string{"error": err.Error()})
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("CREATE_CATALOG_SERVER_OK", "id", rec.ID)
+				deps.Logger.Info("CREATE_CATALOG_SERVER_SUCCESS", "id", rec.ID)
 			}
-			WriteJSON(w, http.StatusCreated, map[string]string{"id": rec.ID})
+			WriteJSON(w, http.StatusCreated,
+				map[string]string{"id": rec.ID})
 		},
 	).Methods(http.MethodPost)
 }
@@ -107,9 +112,13 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 			hubID := r.URL.Query().Get("hub_server_id")
 			status := r.URL.Query().Get("status")
 			q := r.URL.Query().Get("q")
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_TOOLS_INIT", "user_id", userID, "hub_server_id", hubID, "status", status, "q_len", len(q))
-			}
+			deps.Logger.Info("LIST_TOOLS_INIT",
+				"user_id", userID,
+				"hub_server_id", hubID,
+				"status", status,
+				"q_len", len(q),
+			)
+
 			if deps.Tools != nil {
 				items, err := deps.Tools.ListForUserFiltered(
 					r.Context(), userID, hubID, status, q,
@@ -126,7 +135,7 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 					return
 				}
 				if deps.Logger != nil {
-					deps.Logger.Info("LIST_TOOLS_OK", "count", len(items))
+					deps.Logger.Info("LIST_TOOLS_SUCCESS", "count", len(items))
 				}
 				WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 				return
@@ -178,7 +187,7 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("UPDATE_TOOL_STATUS_OK", "id", id)
+				deps.Logger.Info("UPDATE_TOOL_STATUS_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 		},
@@ -193,7 +202,7 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 				deps.Logger.Info("DELETE_TOOL_INIT", "id", id)
 			}
 			if err := deps.Tools.SetStatus(
-				r.Context(), id, "DEACTIVATED",
+				r.Context(), id, string(m.StatusDeactivated),
 			); err != nil {
 				if deps.Logger != nil {
 					deps.Logger.Error("DELETE_TOOL_ERROR", "error", err)
@@ -206,7 +215,7 @@ func addToolsRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("DELETE_TOOL_OK", "id", id)
+				deps.Logger.Info("DELETE_TOOL_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 		},
@@ -248,7 +257,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			deps.Logger.Info("CREATE_VIRTUAL_SERVER_OK", "id", id)
+			deps.Logger.Info("CREATE_VIRTUAL_SERVER_SUCCESS", "id", id)
 			WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
 		},
 	).Methods(http.MethodPost)
@@ -269,7 +278,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			deps.Logger.Info("LIST_VIRTUAL_SERVERS_OK", "count", len(items))
+			deps.Logger.Info("LIST_VIRTUAL_SERVERS_SUCCESS", "count", len(items))
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
 	).Methods(http.MethodGet)
@@ -305,7 +314,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("REPLACE_VS_TOOLS_OK", "id", id)
+				deps.Logger.Info("REPLACE_VS_TOOLS_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 		},
@@ -329,7 +338,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			deps.Logger.Info("LIST_VS_TOOLS_OK", "count", len(items))
+			deps.Logger.Info("LIST_VS_TOOLS_SUCCESS", "count", len(items))
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
 	).Methods(http.MethodGet)
@@ -376,7 +385,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("UPDATE_VS_STATUS_OK", "id", id)
+				deps.Logger.Info("UPDATE_VS_STATUS_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 		},
@@ -402,7 +411,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("DELETE_VS_OK", "id", id)
+				deps.Logger.Info("DELETE_VS_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 		},
@@ -433,7 +442,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("LIST_HUB_SERVERS_OK", "count", len(items))
+				deps.Logger.Info("LIST_HUB_SERVERS_SUCCESS", "count", len(items))
 			}
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
@@ -469,7 +478,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 				return
 			}
 			if deps.Logger != nil {
-				deps.Logger.Info("CREATE_HUB_SERVER_OK", "id", id)
+				deps.Logger.Info("CREATE_HUB_SERVER_SUCCESS", "id", id)
 			}
 			WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "ok": true})
 		},
@@ -497,7 +506,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 					return
 				}
 				if deps.Logger != nil {
-					deps.Logger.Info("DELETE_HUB_SERVER_OK", "id", id)
+					deps.Logger.Info("DELETE_HUB_SERVER_SUCCESS", "id", id)
 				}
 				WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 			case http.MethodPatch:
@@ -539,7 +548,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 					return
 				}
 				if deps.Logger != nil {
-					deps.Logger.Info("UPDATE_HUB_STATUS_OK", "id", id)
+					deps.Logger.Info("UPDATE_HUB_STATUS_SUCCESS", "id", id)
 				}
 				WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 			default:
@@ -570,9 +579,12 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("REFRESH_HUB_OK", "added", len(added), "deleted", len(deleted))
-			}
+
+			deps.Logger.Info("REFRESH_HUB_SUCCESS",
+				"added", len(added),
+				"deleted", len(deleted),
+			)
+
 			WriteJSON(w, http.StatusOK, map[string]any{
 				"ok":      true,
 				"added":   added,

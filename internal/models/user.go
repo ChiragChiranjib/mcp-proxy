@@ -10,3 +10,6 @@ type User struct {
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
+
+// TableName ...
+func (User) TableName() string { return "users" }

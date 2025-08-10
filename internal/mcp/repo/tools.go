@@ -19,8 +19,10 @@ func (r *Repo) UpsertTool(ctx context.Context, t m.MCPTool) error {
 	}).Create(&t).Error
 }
 
-// ListToolsForVirtualServer returns tools joined via tools_virtual_servers for a vs id.
-func (r *Repo) ListToolsForVirtualServer(ctx context.Context, vsID string) ([]m.MCPTool, error) {
+// ListToolsForVirtualServer returns tools joined via tools_virtual_servers
+// for a vs id.
+func (r *Repo) ListToolsForVirtualServer(
+	ctx context.Context, vsID string) ([]m.MCPTool, error) {
 	var tools []m.MCPTool
 	err := r.WithContext(ctx).
 		Table("mcp_tools").
@@ -30,8 +32,14 @@ func (r *Repo) ListToolsForVirtualServer(ctx context.Context, vsID string) ([]m.
 	return tools, err
 }
 
-// ListUserToolsFiltered returns tools for a user filtered by hub, status, and query.
-func (r *Repo) ListUserToolsFiltered(ctx context.Context, userID, hubServerID, status, q string) ([]m.MCPTool, error) {
+// ListUserToolsFiltered returns tools for a user filtered by hub,
+// status, and query.
+func (r *Repo) ListUserToolsFiltered(
+	ctx context.Context,
+	userID,
+	hubServerID,
+	status,
+	q string) ([]m.MCPTool, error) {
 	qdb := r.WithContext(ctx).Table("mcp_tools").Where("user_id = ?", userID)
 	if hubServerID != "" {
 		qdb = qdb.Where("mcp_hub_server_id = ?", hubServerID)
@@ -40,7 +48,7 @@ func (r *Repo) ListUserToolsFiltered(ctx context.Context, userID, hubServerID, s
 		qdb = qdb.Where("status = ?", status)
 	}
 	if q != "" {
-		qdb = qdb.Where("modified_name LIKE ? OR original_name LIKE ?", "%"+q+"%", "%"+q+"%")
+		qdb = qdb.Where("modified_name LIKE ? OR original_name LIKE ?", "%"+q+"%", "%"+q+"%") //nolint:lll
 	}
 	var tools []m.MCPTool
 	if err := qdb.Order("modified_name").Find(&tools).Error; err != nil {
@@ -50,17 +58,23 @@ func (r *Repo) ListUserToolsFiltered(ctx context.Context, userID, hubServerID, s
 }
 
 // ListActiveToolsForHub returns active tools for a hub server.
-func (r *Repo) ListActiveToolsForHub(ctx context.Context, hubServerID string) ([]m.MCPTool, error) {
+func (r *Repo) ListActiveToolsForHub(
+	ctx context.Context, hubServerID string) ([]m.MCPTool, error) {
 	var tools []m.MCPTool
-	if err := r.WithContext(ctx).Where("mcp_hub_server_id = ? AND status = 'ACTIVE'", hubServerID).Find(&tools).Error; err != nil {
+	if err := r.WithContext(ctx).
+		Where("mcp_hub_server_id = ? AND status = 'ACTIVE'", hubServerID).
+		Find(&tools).Error; err != nil {
 		return nil, err
 	}
 	return tools, nil
 }
 
 // GetActiveToolByID returns a tool by id only if it is ACTIVE.
-func (r *Repo) GetActiveToolByID(ctx context.Context, id string) (m.MCPTool, error) {
+func (r *Repo) GetActiveToolByID(
+	ctx context.Context, id string) (m.MCPTool, error) {
 	var t m.MCPTool
-	err := r.WithContext(ctx).Where("id = ? AND status = 'ACTIVE'", id).Take(&t).Error
+	err := r.WithContext(ctx).
+		Where("id = ? AND status = 'ACTIVE'", id).
+		Take(&t).Error
 	return t, err
 }
