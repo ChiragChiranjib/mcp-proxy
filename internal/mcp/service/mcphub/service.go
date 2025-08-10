@@ -70,11 +70,11 @@ func (s *Service) Get(ctx context.Context, id string) (m.MCPHubServer, error) {
 func (s *Service) ListForUser(
 	ctx context.Context,
 	userID string,
-) ([]m.MCPHubServer, error) {
+) ([]m.MCPHubServerAggregate, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	s.logger.Info("MCP_HUB_LIST_FOR_USER_INIT", "user_id", userID)
-	rows, err := s.repo.ListUserHubServers(ctx, userID)
+	rows, err := s.repo.ListUserHubMCPServers(ctx, userID)
 	if err != nil {
 		s.logger.Error("MCP_HUB_LIST_FOR_USER_ERROR", "error", err)
 		return nil, err
@@ -100,14 +100,14 @@ func (s *Service) SetStatus(
 
 // GetWithURL fetches hub with resolved server url and name.
 func (s *Service) GetWithURL(
-	ctx context.Context, id string) (repo.HubWithURL, error) {
+	ctx context.Context, id string) (m.MCPHubServerAggregate, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	s.logger.Info("MCP_HUB_GET_WITH_URL_INIT", "id", id)
 	r, err := s.repo.GetHubServerWithURL(ctx, id)
 	if err != nil {
 		s.logger.Error("MCP_HUB_GET_WITH_URL_ERROR", "error", err)
-		return repo.HubWithURL{}, err
+		return m.MCPHubServerAggregate{}, err
 	}
 	s.logger.Info("MCP_HUB_GET_WITH_URL_OK", "id", r.ID)
 	return r, nil

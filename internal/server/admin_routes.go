@@ -231,6 +231,7 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 		func(w http.ResponseWriter, r *http.Request) {
 			userID := ck.GetUserIDFromContext(r.Context())
 			var body struct {
+				Name    string   `json:"name"`
 				ToolIDs []string `json:"tool_ids"`
 			}
 			if !ReadJSON(w, r, &body) {
@@ -245,9 +246,9 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 				err error
 			)
 			if len(body.ToolIDs) > 0 {
-				id, err = deps.Virtual.CreateWithTools(r.Context(), userID, body.ToolIDs)
+				id, err = deps.Virtual.CreateWithTools(r.Context(), userID, body.Name, body.ToolIDs)
 			} else {
-				id, err = deps.Virtual.Create(r.Context(), userID)
+				id, err = deps.Virtual.Create(r.Context(), userID, body.Name)
 			}
 			if err != nil {
 				deps.Logger.Error("CREATE_VIRTUAL_SERVER_DB_ERROR", "error", err)
@@ -426,9 +427,8 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 	r.HandleFunc(
 		cfg.AdminPrefix+"/hub/servers",
 		func(w http.ResponseWriter, r *http.Request) {
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_HUB_SERVERS_INIT", "user_id", ck.GetUserIDFromContext(r.Context()))
-			}
+			deps.Logger.Info("LIST_HUB_SERVERS_INIT",
+				"user_id", ck.GetUserIDFromContext(r.Context()))
 			userID := ck.GetUserIDFromContext(r.Context())
 			items, err := deps.Hubs.ListForUser(r.Context(), userID)
 			if err != nil {
@@ -442,9 +442,7 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 				)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("LIST_HUB_SERVERS_SUCCESS", "count", len(items))
-			}
+			deps.Logger.Info("LIST_HUB_SERVERS_SUCCESS", "count", len(items))
 			WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 		},
 	).Methods(http.MethodGet)
@@ -587,9 +585,11 @@ func addHubRoutes(r *mux.Router, deps Deps, cfg Config) {
 			)
 
 			WriteJSON(w, http.StatusOK, map[string]any{
-				"ok":      true,
-				"added":   added,
-				"deleted": deleted,
+				"ok":            true,
+				"added":         added,
+				"deleted":       deleted,
+				"total_added":   len(added),
+				"total_deleted": len(deleted),
 			})
 		},
 	).Methods(http.MethodPost)

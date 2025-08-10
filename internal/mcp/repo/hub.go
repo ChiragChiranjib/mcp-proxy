@@ -31,22 +31,30 @@ type HubWithURL struct {
 
 // GetHubServerWithURL ...
 func (r *Repo) GetHubServerWithURL(
-	ctx context.Context, id string) (HubWithURL, error) {
-	var out HubWithURL
-	err := r.WithContext(ctx).Table("mcp_hub_servers h").
-		Select("h.*, s.url as server_url, s.name as server_name").
+	ctx context.Context, id string) (m.MCPHubServerAggregate, error) {
+	var out m.MCPHubServerAggregate
+	err := r.WithContext(ctx).
+		Table("mcp_hub_servers h").
+		Select("h.id, h.user_id, h.mcp_server_id, h.status, "+
+			"h.transport, h.capabilities, h.auth_type, h.auth_value, h.created_at, "+
+			"h.updated_at, s.name AS name, s.url AS url, s.description AS description").
 		Joins("JOIN mcp_servers s ON s.id = h.mcp_server_id").
 		Where("h.id = ?", id).Scan(&out).Error
 	return out, err
 }
 
-// ListUserHubServers ...
-func (r *Repo) ListUserHubServers(
-	ctx context.Context, userID string) ([]m.MCPHubServer, error) {
-	var rows []m.MCPHubServer
+// ListUserHubMCPServers ...
+func (r *Repo) ListUserHubMCPServers(
+	ctx context.Context, userID string) ([]m.MCPHubServerAggregate, error) {
+	var rows []m.MCPHubServerAggregate
 	err := r.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Find(&rows).Error
+		Table("mcp_hub_servers h").
+		Select("h.id, h.user_id, h.mcp_server_id, h.status,"+
+			"h.transport, h.capabilities, h.auth_type, h.auth_value, h.created_at, "+
+			"h.updated_at, s.name AS name, s.url AS url, s.description AS description").
+		Joins("JOIN mcp_servers s ON s.id = h.mcp_server_id").
+		Where("h.user_id = ?", userID).
+		Scan(&rows).Error
 	return rows, err
 }
 

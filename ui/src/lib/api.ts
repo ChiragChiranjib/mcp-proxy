@@ -1,9 +1,33 @@
 export type CatalogServer = { id: string; name: string; url: string; description: string }
-export type HubServer = { id: string; user_id: string; mcp_server_id: string; status: string; transport: string; server_url?: string; server_name?: string }
-export type Tool = { id: string; user_id: string; original_name: string; modified_name: string; hub_server_id: string; status: string }
+export type HubServer = {
+  id?: string
+  user_id: string
+  mcp_server_id: string
+  status: string
+  transport: string
+  capabilities?: any
+  auth_type?: string
+  auth_value?: string
+  server_url?: string
+  server_name?: string
+  name?: string
+  url?: string
+  description?: string
+}
+export type Tool = { id: string; user_id: string; original_name: string; modified_name: string; mcp_hub_server_id?: string; hub_server_id?: string; status: string; description?: string; input_schema?: any }
 export type VirtualServer = { id: string; user_id: string; status: string }
 
 const USER_ID = localStorage.getItem('x-user-id') || ''
+
+class ApiError extends Error {
+  status: number
+  requestId?: string
+  constructor(message: string, status: number, requestId?: string) {
+    super(message)
+    this.status = status
+    this.requestId = requestId
+  }
+}
 
 async function http<T>(input: RequestInfo, init: RequestInit = {}): Promise<T> {
   const res = await fetch(input, {
@@ -11,7 +35,26 @@ async function http<T>(input: RequestInfo, init: RequestInit = {}): Promise<T> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(USER_ID ? {'X-User-ID': USER_ID} : {}), ...(init.headers || {}) },
   })
-  if (!res.ok) throw new Error(`${res.status}`)
+  const requestId = res.headers.get('x-request-id') || undefined
+  if (!res.ok) {
+    // try to extract server error body
+    let msg = res.statusText || `HTTP ${res.status}`
+    try {
+      const text = await res.text()
+      if (text) {
+        try {
+          const j = JSON.parse(text)
+          msg = j.error || j.message || j.msg || text
+        } catch {
+          msg = text
+        }
+      }
+    } catch {}
+    if (res.status === 401) {
+      try { window.dispatchEvent(new CustomEvent('session:expired')) } catch {}
+    }
+    throw new ApiError(msg, res.status, requestId)
+  }
   if (res.status === 204) {
     return undefined as unknown as T
   }

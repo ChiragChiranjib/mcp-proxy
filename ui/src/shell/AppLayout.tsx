@@ -1,7 +1,9 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { setBasicCredentials, clearBasicCredentials, hydrateBasicCredentials } from '../lib/auth'
 import { GoogleLogin } from './GoogleLogin'
+import { ToastHost } from '../components/ToastHost'
 
 // Theme toggle removed per design
 
@@ -14,6 +16,7 @@ export function AppLayout() {
 
   useEffect(() => {
     // Check session on load
+    hydrateBasicCredentials()
     api.me().then(() => {
       // we don't get full profile; read cached email if present
       const cached = localStorage.getItem('user-email') || 'signed-in'
@@ -36,6 +39,15 @@ export function AppLayout() {
     }
   }
 
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null)
+      localStorage.removeItem('user-email')
+    }
+    window.addEventListener('session:expired', onExpired as any)
+    return () => window.removeEventListener('session:expired', onExpired as any)
+  }, [])
+
   const logout = async () => {
     try { await api.logout() } catch {}
     setUser(null)
@@ -46,11 +58,15 @@ export function AppLayout() {
     e.preventDefault()
     setErr('')
     try {
+      // Preload basic auth so middleware accepts the login route as well
+      setBasicCredentials(basicU, basicP, true)
       const data = await api.loginWithBasic(basicU, basicP)
       setUser({ email: data.email })
       if (data.email) localStorage.setItem('user-email', data.email)
     } catch (e) {
       setErr('Invalid username or password')
+      // clear preloaded creds on failure
+      clearBasicCredentials()
     }
   }
 
@@ -63,7 +79,7 @@ export function AppLayout() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
         <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
           <div className="container flex h-14 items-center justify-between">
-            <Link to="/" className="font-semibold">Global MCP Gateway</Link>
+            <Link to="/" className="font-semibold">MCP Proxy</Link>
             <div />
           </div>
         </header>
@@ -105,13 +121,13 @@ export function AppLayout() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
       <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
         <div className="container flex h-14 items-center justify-between">
-          <Link to="/" className="font-semibold">Global MCP Gateway</Link>
+          <Link to="/" className="font-semibold">MCP Proxy</Link>
           <div className="flex items-center gap-6 text-sm">
             <nav className="flex items-center gap-6 text-sm">
-              <NavLink to="/" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400'}>Catalogue</NavLink>
-              <NavLink to="/hub" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400'}>Hub</NavLink>
-              <NavLink to="/tools" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400'}>Tools</NavLink>
-              <NavLink to="/virtual-servers" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400'}>Virtual Servers</NavLink>
+              <NavLink to="/" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Catalogue</NavLink>
+              <NavLink to="/hub" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Hub</NavLink>
+              <NavLink to="/tools" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Tools</NavLink>
+              <NavLink to="/virtual-servers" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Virtual Servers</NavLink>
             </nav>
             <UserMenu email={user.email || ''} onLogout={logout} />
           </div>
@@ -120,6 +136,7 @@ export function AppLayout() {
       <main className="container py-8">
         <Outlet />
       </main>
+      <ToastHost />
     </div>
   )
 }
@@ -128,13 +145,13 @@ function UserMenu({ email, onLogout }: { email: string; onLogout: ()=>void }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="relative">
-      <button onClick={()=>setOpen(v=>!v)} className="px-2 py-1 rounded border">Login Details</button>
+      <button onClick={()=>setOpen(v=>!v)} className="px-2 py-1 rounded border hover:bg-white/5 hover:border-white/20 transition focus:outline-none focus:ring-2 focus:ring-white/20">Login Details</button>
       {open && (
         <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-black/70 backdrop-blur p-3 shadow-xl">
           <div className="text-xs text-slate-400 mb-1">Signed in as</div>
           <div className="text-sm break-all">{email || 'unknown'}</div>
           <div className="mt-3 flex justify-end">
-            <button className="px-2 py-1 rounded border" onClick={onLogout}>Logout</button>
+            <button className="px-2 py-1 rounded border" onClick={() => { clearBasicCredentials(); onLogout() }}>Logout</button>
           </div>
         </div>
       )}

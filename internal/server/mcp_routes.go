@@ -191,7 +191,7 @@ func _(
 					httpclient.WithHeaders(headers),
 				)
 				baseTransport := sdk.NewStreamableClientTransport(
-					hub.ServerURL,
+					hub.URL,
 					&sdk.StreamableClientTransportOptions{
 						HTTPClient: httpClient,
 					},
@@ -376,7 +376,7 @@ func makeProxyToolHandler(
 		}
 
 		res, err := mcpclient.CallTool(
-			ctx, hub.ServerURL, upstreamOriginalName, args, headers)
+			ctx, hub.URL, upstreamOriginalName, args, headers)
 		if err != nil {
 			deps.Logger.Error("PROXY_TOOL_CALL_ERROR", "error", err)
 			return &mcp.CallToolResult{

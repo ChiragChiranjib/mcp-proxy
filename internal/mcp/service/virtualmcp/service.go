@@ -49,13 +49,14 @@ func (s *Service) GetTools(
 }
 
 // Create creates a new virtual server for a user.
-func (s *Service) Create(ctx context.Context, userID string) (string, error) {
+func (s *Service) Create(ctx context.Context, userID string, name string) (string, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	id := "vs_" + idgen.NewID()
 	if err := s.repo.CreateVirtualServer(ctx, m.MCPVirtualServer{
 		ID:     id,
 		UserID: userID,
+		Name:   name,
 		Status: m.StatusActive,
 	}); err != nil {
 		return "", err
@@ -111,6 +112,7 @@ func (s *Service) ReplaceTools(
 func (s *Service) CreateWithTools(
 	ctx context.Context,
 	userID string,
+	name string,
 	toolIDs []string,
 ) (string, error) {
 	ctx, cancel := s.withTimeout(ctx)
@@ -128,6 +130,7 @@ func (s *Service) CreateWithTools(
 		if err := tx.CreateVirtualServer(ctx, m.MCPVirtualServer{
 			ID:     id,
 			UserID: userID,
+			Name:   name,
 			Status: m.StatusActive,
 		}); err != nil {
 			return err

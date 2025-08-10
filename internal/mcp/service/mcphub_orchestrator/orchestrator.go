@@ -175,8 +175,8 @@ func (o *Orchestrator) RefreshHub(
 		return nil, nil, err
 	}
 
-	serverURL := info.ServerURL
-	serverName := info.ServerName
+	serverURL := info.URL
+	serverName := info.Name
 	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_INIT")
 	headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &info.MCPHubServer)
 	res, err := mcpclient.ListTools(ctx, serverURL, headers)

@@ -35,7 +35,12 @@ func Auth(
 				return []byte(jwtSecret), nil
 			})
 			if perr != nil || token == nil || !token.Valid {
-				logger.Error("AUTH_JWT_PARSE_ERROR", "error", perr)
+				logger.Error(
+					"AUTH_JWT_PARSE_ERROR",
+					"error", perr,
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -50,7 +55,13 @@ func Auth(
 				ctx = context.WithValue(ctx, ck.UserRoleKey, role)
 				r = r.WithContext(ctx)
 
-				logger.Info("AUTH_JWT_OK", "uid", uid, "role", role)
+				logger.Info(
+					"AUTH_JWT_OK",
+					"uid", uid,
+					"role", role,
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 			}
 
 			next.ServeHTTP(w, r)
@@ -61,7 +72,7 @@ func Auth(
 var skipRoutesForBasicAuth = []string{
 	"/live",
 	"/ready",
-	"api/auth",
+	"/api/auth",
 }
 
 // mcpPathRE matches /servers/{22-char-id}/mcp exactly, where the id is
@@ -79,6 +90,19 @@ func BasicAuth(
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If session (JWT) auth has already populated user context, skip
+			if v := r.Context().Value(ck.UserIDKey); v != nil {
+				if s, ok := v.(string); ok && s != "" {
+					logger.Info(
+						"BASIC_AUTH_SKIPPED_SESSION",
+						"uid", s,
+						"method", r.Method,
+						"path", r.URL.Path,
+					)
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			p := r.URL.Path
 			// Skip Basic auth for MCP streamable endpoint with 22-char id
 			if mcpPathRE.MatchString(p) {
@@ -95,7 +119,12 @@ func BasicAuth(
 			authz := r.Header.Get("Authorization")
 			authToken := strings.SplitN(authz, " ", 2)
 			if len(authToken) != 2 {
-				logger.Error("BASIC_AUTH_INVALID_AUTH_HEADER")
+				logger.Error(
+					"BASIC_AUTH_INVALID_AUTH_HEADER",
+					"authz", authz,
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 				http.Error(w, "invalid authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -104,14 +133,22 @@ func BasicAuth(
 			if err != nil {
 				w.Header().Set("WWW-Authenticate", "Basic realm=restricted")
 				http.Error(w, "invalid authorization header", http.StatusUnauthorized)
-				logger.Error("BASIC_AUTH_DECODE_ERROR")
+				logger.Error(
+					"BASIC_AUTH_DECODE_ERROR",
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 				return
 			}
 			parts := strings.SplitN(string(raw), ":", 2)
 			if len(parts) != 2 {
 				w.Header().Set("WWW-Authenticate", "Basic realm=restricted")
 				http.Error(w, "invalid authorization header", http.StatusUnauthorized)
-				logger.Error("BASIC_AUTH_FORMAT_ERROR")
+				logger.Error(
+					"BASIC_AUTH_FORMAT_ERROR",
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 				return
 			}
 			username := parts[0]
@@ -119,7 +156,13 @@ func BasicAuth(
 			if username != creds.BasicUsername || password != creds.BasicPassword {
 				w.Header().Set("WWW-Authenticate", "Basic realm=restricted")
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				logger.Error("BASIC_AUTH_UNAUTHORIZED", "username", username)
+				logger.Error(
+					"BASIC_AUTH_UNAUTHORIZED",
+					"username", username,
+					"password", password,
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
 				return
 			}
 
@@ -134,10 +177,13 @@ func BasicAuth(
 			ctx = context.WithValue(ctx, ck.UserEmailKey, userEntity.Username)
 			ctx = context.WithValue(ctx, ck.UserRoleKey, userEntity.Role)
 
-			logger.Info("BASIC_AUTH_SUCCESS",
+			logger.Info(
+				"BASIC_AUTH_SUCCESS",
 				"username", userEntity.Username,
 				"user_id", userEntity.ID,
 				"role", userEntity.Role,
+				"method", r.Method,
+				"path", r.URL.Path,
 			)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
