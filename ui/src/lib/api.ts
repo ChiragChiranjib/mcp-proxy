@@ -15,7 +15,7 @@ export type HubServer = {
   description?: string
 }
 export type Tool = { id: string; user_id: string; original_name: string; modified_name: string; mcp_hub_server_id?: string; hub_server_id?: string; status: string; description?: string; input_schema?: any }
-export type VirtualServer = { id: string; user_id: string; status: string }
+export type VirtualServer = { id: string; user_id: string; name?: string; status: string }
 
 const USER_ID = localStorage.getItem('x-user-id') || ''
 
@@ -65,7 +65,7 @@ export const api = {
   loginWithGoogle: (credential: string) => http<{user_id: string; email: string; name?: string}>('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
   logout: () => http<void>('/api/auth/logout', { method: 'POST' }),
   loginWithBasic: (username: string, password: string) => http<{user_id: string; email: string}>('/api/auth/basic', { method: 'POST', body: JSON.stringify({ username, password }) }),
-  me: () => http<{user_id: string}>('/api/auth/me'),
+  me: () => http<{user_id: string; email?: string; name?: string}>('/api/auth/me'),
   listCatalog: () => http<{items: CatalogServer[]}>('/api/catalog/servers'),
   listHubs: () => http<{items: HubServer[]}>('/api/hub/servers'),
   addHub: (body: any) => http<{id: string}>('/api/hub/servers', { method: 'POST', body: JSON.stringify(body) }),
@@ -74,10 +74,12 @@ export const api = {
   listTools: (q: URLSearchParams) => http<{items: Tool[]}>(`/api/tools?${q.toString()}`),
   setToolStatus: (id: string, status: string) => http<{ok: string}>(`/api/tools/${id}/status`, { method: 'PATCH', body: JSON.stringify({status}) }),
   deleteTool: (id: string) => http<{ok: string}>(`/api/tools/${id}`, { method: 'DELETE' }),
-  createVS: () => http<{id: string}>(`/api/virtual-servers`, { method: 'POST' }),
+  createVS: (name?: string, tool_ids?: string[]) => http<{id: string}>(`/api/virtual-servers`, { method: 'POST', body: JSON.stringify({ name, tool_ids }) }),
   listVS: () => http<{items: VirtualServer[]}>(`/api/virtual-servers`),
   replaceVSTools: (id: string, tool_ids: string[]) => http<{ok: string}>(`/api/virtual-servers/${id}/tools`, { method: 'PUT', body: JSON.stringify({tool_ids}) }),
+  removeVSTool: (id: string, tool_id: string) => http<{ok: string}>(`/api/virtual-servers/${id}/tools/${tool_id}`, { method: 'DELETE' }),
   setVSStatus: (id: string, status: string) => http<{ok: string}>(`/api/virtual-servers/${id}/status`, { method: 'PATCH', body: JSON.stringify({status}) }),
   deleteVS: (id: string) => http<{ok: string}>(`/api/virtual-servers/${id}`, { method: 'DELETE' }),
+  listVSTools: (id: string) => http<{items: Tool[]}>(`/api/virtual-servers/${id}/tools`),
 }
 

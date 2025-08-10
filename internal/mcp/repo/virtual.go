@@ -46,6 +46,14 @@ func (r *Repo) AddVirtualServerTool(
 	return r.WithContext(ctx).Create(&rec).Error
 }
 
+// DeleteVirtualServerTool removes a single tool from a virtual server.
+func (r *Repo) DeleteVirtualServerTool(
+	ctx context.Context, vsID, toolID string) error {
+	return r.WithContext(ctx).
+		Where("mcp_virtual_server_id = ? AND tool_id = ?", vsID, toolID).
+		Delete(&m.ToolVirtualServer{}).Error
+}
+
 // DeleteVirtualServer ...
 func (r *Repo) DeleteVirtualServer(
 	ctx context.Context, id string) error {

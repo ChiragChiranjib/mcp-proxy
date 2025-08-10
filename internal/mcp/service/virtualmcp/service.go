@@ -160,3 +160,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	defer cancel()
 	return s.repo.DeleteVirtualServer(ctx, id)
 }
+
+// RemoveTool detaches one tool from a virtual server.
+func (s *Service) RemoveTool(
+	ctx context.Context, vsID string, toolID string,
+) error {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.DeleteVirtualServerTool(ctx, vsID, toolID)
+}

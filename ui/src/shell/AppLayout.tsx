@@ -1,14 +1,14 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { setBasicCredentials, clearBasicCredentials, hydrateBasicCredentials } from '../lib/auth'
+import { setBasicCredentials, clearBasicCredentials, hydrateBasicCredentials, getBasicUsername } from '../lib/auth'
 import { GoogleLogin } from './GoogleLogin'
 import { ToastHost } from '../components/ToastHost'
 
 // Theme toggle removed per design
 
 export function AppLayout() {
-  const [user, setUser] = useState<{email?: string; name?: string} | null>(null)
+  const [user, setUser] = useState<{email?: string; name?: string; userId?: string} | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [basicU, setBasicU] = useState('')
   const [basicP, setBasicP] = useState('')
@@ -17,10 +17,10 @@ export function AppLayout() {
   useEffect(() => {
     // Check session on load
     hydrateBasicCredentials()
-    api.me().then(() => {
+    api.me().then((m) => {
       // we don't get full profile; read cached email if present
-      const cached = localStorage.getItem('user-email') || 'signed-in'
-      setUser({ email: cached })
+      const cached = localStorage.getItem('user-email') || undefined
+      setUser({ email: cached, userId: (m as any).user_id })
     }).catch(() => {
       setUser(null)
     }).finally(() => setAuthChecked(true))
@@ -32,7 +32,7 @@ export function AppLayout() {
   const onGoogleSuccess = async (credential: string) => {
     try {
       const data = await api.loginWithGoogle(credential)
-      setUser({ email: data.email, name: data.name })
+      setUser({ email: data.email, name: data.name, userId: (data as any).user_id })
       if (data.email) localStorage.setItem('user-email', data.email)
     } catch (e) {
       console.error('login failed', e)
@@ -61,7 +61,7 @@ export function AppLayout() {
       // Preload basic auth so middleware accepts the login route as well
       setBasicCredentials(basicU, basicP, true)
       const data = await api.loginWithBasic(basicU, basicP)
-      setUser({ email: data.email })
+      setUser({ email: data.email, userId: (data as any).user_id })
       if (data.email) localStorage.setItem('user-email', data.email)
     } catch (e) {
       setErr('Invalid username or password')
@@ -126,7 +126,6 @@ export function AppLayout() {
             <nav className="flex items-center gap-6 text-sm">
               <NavLink to="/" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Catalogue</NavLink>
               <NavLink to="/hub" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Hub</NavLink>
-              <NavLink to="/tools" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Tools</NavLink>
               <NavLink to="/virtual-servers" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Virtual Servers</NavLink>
             </nav>
             <UserMenu email={user.email || ''} onLogout={logout} />
@@ -143,15 +142,22 @@ export function AppLayout() {
 
 function UserMenu({ email, onLogout }: { email: string; onLogout: ()=>void }) {
   const [open, setOpen] = useState(false)
+  const username = getBasicUsername()
   return (
     <div className="relative">
       <button onClick={()=>setOpen(v=>!v)} className="px-2 py-1 rounded border hover:bg-white/5 hover:border-white/20 transition focus:outline-none focus:ring-2 focus:ring-white/20">Login Details</button>
       {open && (
-        <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-black/70 backdrop-blur p-3 shadow-xl">
+        <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/15 bg-black/90 backdrop-blur p-3 shadow-2xl">
           <div className="text-xs text-slate-400 mb-1">Signed in as</div>
-          <div className="text-sm break-all">{email || 'unknown'}</div>
+          <div className="text-sm break-all">{email || username || (typeof window !== 'undefined' ? (window as any).USER_ID : '') || 'unknown'}</div>
           <div className="mt-3 flex justify-end">
-            <button className="px-2 py-1 rounded border" onClick={() => { clearBasicCredentials(); onLogout() }}>Logout</button>
+            <button
+              className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500/30 active:scale-95 transition"
+              onClick={() => { clearBasicCredentials(); onLogout() }}
+              title="Sign out"
+            >
+              Logout
+            </button>
           </div>
         </div>
       )}

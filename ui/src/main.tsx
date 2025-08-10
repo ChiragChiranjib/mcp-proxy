@@ -5,7 +5,6 @@ import './styles.css'
 import { AppLayout } from './shell/AppLayout'
 import { Catalogue } from './pages/Catalogue'
 import { Hub } from './pages/Hub'
-import { Tools } from './pages/Tools'
 import { VirtualServers } from './pages/VirtualServers'
 
 const router = createBrowserRouter([
@@ -15,7 +14,6 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Catalogue /> },
       { path: 'hub', element: <Hub /> },
-      { path: 'tools', element: <Tools /> },
       { path: 'virtual-servers', element: <VirtualServers /> },
     ],
   },

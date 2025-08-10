@@ -49,3 +49,13 @@ func (s *Service) FindUserByUserName(
 
 	return user, nil
 }
+
+// FindUserByID returns user by id.
+func (s *Service) FindUserByID(
+	ctx context.Context, userID string) (*m.User, error) {
+	user, err := s.repo.FindUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}

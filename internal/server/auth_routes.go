@@ -16,25 +16,29 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 	// get current session info (if any)
 	r.HandleFunc(cfg.AdminPrefix+"/auth/me",
 		func(w http.ResponseWriter, r *http.Request) {
-			if deps.Logger != nil {
-				deps.Logger.Info("AUTH_ME_INIT",
-					"method", r.Method,
-					"path", r.URL.Path,
-					"user_id", ck.GetUserIDFromContext(r.Context()),
-				)
-			}
+			deps.Logger.Info("AUTH_ME_INIT",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"user_id", ck.GetUserIDFromContext(r.Context()),
+			)
+
 			uid := ck.GetUserIDFromContext(r.Context())
 			if uid == "" {
-				if deps.Logger != nil {
-					deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
-				}
+				deps.Logger.Info("AUTH_ME_UNAUTHORIZED")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if deps.Logger != nil {
-				deps.Logger.Info("AUTH_ME_OK", "user_id", uid)
+
+			deps.Logger.Info("AUTH_ME_SUCCESS", "user_id", uid)
+			u, err := deps.UserService.FindUserByID(r.Context(), uid)
+			if err != nil {
+				deps.Logger.Info("AUTH_USER_NOT_FOUND", "user_id", uid)
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
-			WriteJSON(w, http.StatusOK, map[string]string{"user_id": uid})
+
+			WriteJSON(w, http.StatusOK,
+				map[string]string{"user_id": uid, "email": u.Username})
 		}).Methods(http.MethodGet)
 	// exchange Google ID token for app session
 	r.HandleFunc(cfg.AdminPrefix+"/auth/google",
@@ -117,7 +121,7 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 				MaxAge:   3600,
 			})
 
-			deps.Logger.Info("AUTH_GOOGLE_OK", "user_id", user.ID)
+			deps.Logger.Info("AUTH_GOOGLE_SUCCESS", "user_id", user.ID)
 			WriteJSON(w, http.StatusOK,
 				map[string]any{"user_id": user.ID, "email": email, "name": name})
 		}).Methods(http.MethodPost)
@@ -144,7 +148,7 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 
 			if req.Username != deps.AppConfig.Security.BasicUsername ||
 				req.Password != deps.AppConfig.Security.BasicPassword {
-				deps.Logger.Error("AUTH_BASIC_INVALID_CREDENTIALS")
+				deps.Logger.Error("AUTH_BASIC_INVALID_CREDENTIALS", "req", req)
 				WriteJSON(w, http.StatusUnauthorized,
 					map[string]string{"error": "invalid credentials"})
 				return
@@ -190,7 +194,7 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 				Secure:   false,
 				MaxAge:   3600,
 			})
-			deps.Logger.Info("AUTH_BASIC_OK", "user_id", userEntity.ID)
+			deps.Logger.Info("AUTH_BASIC_SUCCESS", "user_id", userEntity.ID)
 			WriteJSON(w, http.StatusOK,
 				map[string]any{"user_id": userEntity.ID, "username": userEntity.Username})
 		}).Methods(http.MethodPost)

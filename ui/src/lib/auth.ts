@@ -30,6 +30,11 @@ export function hydrateBasicCredentials() {
   }
 }
 
+export function getBasicUsername(): string | null {
+  hydrateBasicCredentials()
+  return basicUsername
+}
+
 export function getBasicAuthHeader(): Record<string, string> {
   hydrateBasicCredentials()
   if (!basicUsername || !basicPassword) return {}

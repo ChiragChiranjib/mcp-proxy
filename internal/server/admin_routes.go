@@ -322,6 +322,24 @@ func addVirtualServerRoutes(r *mux.Router, deps Deps, cfg Config) {
 		},
 	).Methods(http.MethodPut)
 
+	// Remove one tool from a virtual server
+	r.HandleFunc(
+		cfg.AdminPrefix+"/virtual-servers/{id}/tools/{tool_id}",
+		func(w http.ResponseWriter, r *http.Request) {
+			vsID := mux.Vars(r)["id"]
+			toolID := mux.Vars(r)["tool_id"]
+			if vsID == "" || toolID == "" {
+				WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing ids"})
+				return
+			}
+			if err := deps.Virtual.RemoveTool(r.Context(), vsID, toolID); err != nil {
+				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		},
+	).Methods(http.MethodDelete)
+
 	// List tools for a virtual server
 	r.HandleFunc(
 		cfg.AdminPrefix+"/virtual-servers/{id}/tools",

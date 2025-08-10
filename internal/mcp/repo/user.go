@@ -18,6 +18,18 @@ func (r *Repo) FindUserByUsername(
 	return &u, nil
 }
 
+// FindUserByID returns the full user record by id
+func (r *Repo) FindUserByID(
+	ctx context.Context, userID string) (*m.User, error) {
+	var u m.User
+	if err := r.WithContext(ctx).
+		Where("id = ?", userID).
+		Take(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 // CreateUser inserts a new user.
 func (r *Repo) CreateUser(ctx context.Context, u *m.User) error {
 	return r.WithContext(ctx).Create(u).Error
