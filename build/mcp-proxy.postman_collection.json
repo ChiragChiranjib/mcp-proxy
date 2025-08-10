@@ -1,0 +1,280 @@
+{
+  "info": {
+    "name": "MCP Proxy API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "a6a2c9d4-2f0f-4f02-ae2b-000000000001"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "basic_username", "value": "" },
+    { "key": "basic_password", "value": "" },
+    { "key": "vs_id", "value": "" },
+    { "key": "tool_id", "value": "" },
+    { "key": "hub_id", "value": "" },
+    { "key": "mcp_server_id", "value": "" }
+  ],
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{basic_username}}", "type": "string" },
+      { "key": "password", "value": "{{basic_password}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Live",
+          "request": { "method": "GET", "url": "{{baseUrl}}/live" }
+        },
+        {
+          "name": "Ready",
+          "request": { "method": "GET", "url": "{{baseUrl}}/ready" }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Me",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+        },
+        {
+          "name": "Basic Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{basic_username}}\",\n  \"password\": \"{{basic_password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/basic"
+          }
+        },
+        {
+          "name": "Google Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential\": \"<GOOGLE_ID_TOKEN>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/google"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/logout" }
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "List Servers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/catalog/servers" }
+        },
+        {
+          "name": "Create Server",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"example\",\n  \"url\": \"https://upstream.example.com\",\n  \"description\": \"Example server\"\n}"
+            },
+            "url": "{{baseUrl}}/api/catalog/servers"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tools",
+      "item": [
+        {
+          "name": "List (filters)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/tools?hub_server_id={{hub_id}}&status=ACTIVE&q="
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tools/{{tool_id}}/status"
+          }
+        },
+        {
+          "name": "Delete (soft)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/tools/{{tool_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Virtual Servers",
+      "item": [
+        {
+          "name": "Create (empty)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/api/virtual-servers"
+          }
+        },
+        {
+          "name": "Create (with tools)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tool_ids\": [\"{{tool_id}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/virtual-servers"
+          }
+        },
+        {
+          "name": "List",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/virtual-servers" }
+        },
+        {
+          "name": "Replace Tools",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tool_ids\": [\"{{tool_id}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}/tools"
+          }
+        },
+        {
+          "name": "List Tools",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}/tools"
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}/status"
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hubs",
+      "item": [
+        {
+          "name": "List",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/hub/servers" }
+        },
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mcp_server_id\": \"{{mcp_server_id}}\",\n  \"transport\": \"streamable-http\",\n  \"auth_type\": \"bearer\",\n  \"auth_value\": \"<TOKEN_OR_JSON>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hub/servers"
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hub/servers/{{hub_id}}"
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/hub/servers/{{hub_id}}"
+          }
+        },
+        {
+          "name": "Refresh Tools",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/hub/servers/{{hub_id}}/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MCP (streamable)",
+      "description": "Streamable MCP endpoint; supports GET/POST/DELETE.",
+      "item": [
+        {
+          "name": "Connect (GET SSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "url": "{{baseUrl}}/servers/{{vs_id}}/mcp"
+          }
+        }
+      ]
+    }
+  ]
+}
+
+

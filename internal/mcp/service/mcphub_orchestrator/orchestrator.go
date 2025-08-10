@@ -124,6 +124,7 @@ func (o *Orchestrator) AddHub(
 	for _, t := range toolsRes.Tools {
 		mod := serverName + "-" + t.Name
 		schemaJSON, _ := json.Marshal(t.InputSchema)
+		annotationsJSON, _ := json.Marshal(t.Annotations)
 		toolModels = append(toolModels, m.MCPTool{
 			ID:             idgen.NewID(),
 			UserID:         req.UserID,
@@ -132,7 +133,7 @@ func (o *Orchestrator) AddHub(
 			MCPHubServerID: hubID,
 			Description:    t.Description,
 			InputSchema:    schemaJSON,
-			Annotations:    nil,
+			Annotations:    annotationsJSON,
 			Status:         m.StatusActive,
 		})
 	}

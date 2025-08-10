@@ -25,16 +25,19 @@ func Auth(
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			c, err := r.Cookie("session")
-			if err != nil {
+			if err != nil || c == nil || c.Value == "" {
+				// No session cookie; proceed without auth context
 				next.ServeHTTP(w, r)
+				return
 			}
 
 			token, perr := jwt.Parse(c.Value, func(_ *jwt.Token) (interface{}, error) {
 				return []byte(jwtSecret), nil
 			})
-			if perr != nil || (token != nil && token.Valid) {
+			if perr != nil || token == nil || !token.Valid {
 				logger.Error("AUTH_JWT_PARSE_ERROR", "error", perr)
-				http.Error(w, "invalid token", http.StatusUnauthorized)
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
