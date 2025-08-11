@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { setBasicCredentials, clearBasicCredentials, hydrateBasicCredentials, getBasicUsername } from '../lib/auth'
 import { GoogleLogin } from './GoogleLogin'
 import { ToastHost } from '../components/ToastHost'
+import { LogoMark } from '../components/LogoMark'
 
 // Theme toggle removed per design
 
@@ -83,7 +84,10 @@ export function AppLayout() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
         <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
           <div className="container flex h-14 items-center justify-between">
-            <Link to="/" className="font-semibold">MCP Proxy 0.1.0</Link>
+            <Link to="/" className="font-semibold flex items-center gap-2">
+              <LogoMark className="w-5 h-5" />
+              MCP Proxy 0.1.0
+            </Link>
             <div />
           </div>
         </header>
@@ -94,23 +98,45 @@ export function AppLayout() {
                 background: 'radial-gradient(1200px 400px at 10% -20%, rgba(59,130,246,0.18), transparent 60%), radial-gradient(1200px 400px at 110% 120%, rgba(16,185,129,0.18), transparent 60%)'
               }} />
               <div className="relative">
-                <h1 className="text-2xl font-semibold tracking-tight mb-6">Sign in to continue</h1>
-                <div className="grid gap-8 md:grid-cols-2 items-start">
-                  <div className="space-y-4">
-                    <div className="text-sm text-slate-400">Continue with SSO</div>
+                <h1
+                  className="text-2xl font-semibold tracking-tight mb-6 text-center"
+                >
+                  Sign in to continue
+                </h1>
+                <div className="grid gap-8 items-start">
+                  {/* Credentials */}
+                  <div className="space-y-5">
+                    <div className="text-sm text-slate-400 text-center">Continue with SSO</div>
                     <div className="rounded-lg bg-white/5 p-4 border border-white/10">
                       <GoogleLogin onSuccess={onGoogleSuccess} />
                     </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="text-sm text-slate-400">Or use your credentials</div>
+                    <div className="text-sm text-slate-400 text-center">Or use your credentials</div>
                     <form onSubmit={submitBasic} className="flex flex-col gap-3">
-                      <input className="px-3 py-2 w-full rounded-lg border border-white/10 bg-black/30 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="username" value={basicU} onChange={e=>setBasicU(e.target.value)} />
-                      <input className="px-3 py-2 w-full rounded-lg border border-white/10 bg-black/30 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40" type="password" placeholder="password" value={basicP} onChange={e=>setBasicP(e.target.value)} />
-                      <button className="px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/15 transition w-full" type="submit">Login</button>
+                      <input
+                        className="px-3 py-2 w-full rounded-lg border border-white/10 bg-black/30 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        placeholder="username"
+                        value={basicU}
+                        onChange={e=>setBasicU(e.target.value)}
+                      />
+                      <input
+                        className="px-3 py-2 w-full rounded-lg border border-white/10 bg-black/30 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        type="password"
+                        placeholder="password"
+                        value={basicP}
+                        onChange={e=>setBasicP(e.target.value)}
+                      />
+                      <button
+                        className="px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/15 transition w-full"
+                        type="submit"
+                      >
+                        Login
+                      </button>
                     </form>
                     {err && <div className="text-red-400 text-xs">{err}</div>}
-                    <p className="text-xs text-slate-500">By continuing you agree to the internal acceptable use policy.</p>
+                    <p className="text-xs text-slate-500">
+                      By continuing you agree to the internal acceptable use
+                      policy.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -125,7 +151,10 @@ export function AppLayout() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
       <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
         <div className="container flex h-14 items-center justify-between">
-          <Link to="/" className="font-semibold">MCP Proxy 0.1.0</Link>
+          <Link to="/" className="font-semibold flex items-center gap-2">
+            <LogoMark className="w-5 h-5" />
+            MCP Proxy 0.1.0
+          </Link>
           <div className="flex items-center gap-6 text-sm">
             <nav className="flex items-center gap-6 text-sm">
               <NavLink to="/" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Catalogue</NavLink>
