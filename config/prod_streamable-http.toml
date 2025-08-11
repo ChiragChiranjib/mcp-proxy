@@ -1,0 +1,25 @@
+APP_ENV = "prod"
+MCP_MODE = "streamable-http"
+
+[server]
+    port = 8080
+
+[database]
+    username = "secret from credstash"
+    password = "secret from credstash"
+    host = "127.0.0.1"
+    port = 3306
+    name = "mcp_gateway"
+    max_open_conns = 25
+    max_idle_conns = 10
+    conn_max_idle_seconds = 300
+    conn_max_lifetime_seconds = 1800
+
+[security]
+    aes_key = "secret from credstash"
+    jwt_secret = "secret from credstash"
+    basic_username = "chirag.chiranjib@razorpay.com"
+    basic_password = "secret from credstash"
+
+[google]
+    client_id = "secret from credstash"
