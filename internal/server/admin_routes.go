@@ -101,6 +101,58 @@ func addCatalogRoutes(r *mux.Router, deps Deps, cfg Config) {
 				map[string]string{"id": rec.ID})
 		},
 	).Methods(http.MethodPost)
+
+	// Update catalog server (ADMIN only)
+	r.HandleFunc(
+		cfg.AdminPrefix+"/catalog/servers/{id}",
+		func(w http.ResponseWriter, r *http.Request) {
+			if ck.GetUserRoleFromContext(r.Context()) != string(m.RoleAdmin) {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_CATALOG_SERVER_FORBIDDEN")
+				}
+				WriteJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+				return
+			}
+			vars := mux.Vars(r)
+			id := vars["id"]
+			var body struct {
+				URL         *string `json:"url"`
+				Description *string `json:"description"`
+			}
+			if !ReadJSON(w, r, &body) {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_CATALOG_SERVER_READ_BODY_ERROR")
+				}
+				return
+			}
+			if (body.URL == nil || *body.URL == "") &&
+				(body.Description == nil || *body.Description == "") {
+				WriteJSON(w, http.StatusBadRequest,
+					map[string]string{"error": "no fields to update"})
+				return
+			}
+			url := ""
+			desc := ""
+			if body.URL != nil {
+				url = *body.URL
+			}
+			if body.Description != nil {
+				desc = *body.Description
+			}
+			if err := deps.Catalog.Update(r.Context(), id, url, desc); err != nil {
+				if deps.Logger != nil {
+					deps.Logger.Error("UPDATE_CATALOG_SERVER_DB_ERROR", "error", err)
+				}
+				WriteJSON(w, http.StatusInternalServerError,
+					map[string]string{"error": err.Error()})
+				return
+			}
+			if deps.Logger != nil {
+				deps.Logger.Info("UPDATE_CATALOG_SERVER_SUCCESS", "id", id)
+			}
+			WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+		},
+	).Methods(http.MethodPatch)
 }
 
 // Tools routes

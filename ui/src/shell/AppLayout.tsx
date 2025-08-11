@@ -8,7 +8,7 @@ import { ToastHost } from '../components/ToastHost'
 // Theme toggle removed per design
 
 export function AppLayout() {
-  const [user, setUser] = useState<{email?: string; name?: string; userId?: string} | null>(null)
+  const [user, setUser] = useState<{email?: string; name?: string; userId?: string; role?: string} | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [basicU, setBasicU] = useState('')
   const [basicP, setBasicP] = useState('')
@@ -24,7 +24,7 @@ export function AppLayout() {
       }
       const fallback = localStorage.getItem('user-email') || getBasicUsername() || undefined
       const email = serverEmail || fallback
-      setUser({ email, userId: (m as any).user_id })
+      setUser({ email, userId: (m as any).user_id, role: (m as any).role })
     }).catch(() => {
       setUser(null)
     }).finally(() => setAuthChecked(true))
@@ -83,7 +83,7 @@ export function AppLayout() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
         <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
           <div className="container flex h-14 items-center justify-between">
-            <Link to="/" className="font-semibold">MCP Proxy</Link>
+            <Link to="/" className="font-semibold">MCP Proxy 0.1.0</Link>
             <div />
           </div>
         </header>
@@ -125,7 +125,7 @@ export function AppLayout() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-100">
       <header className="border-b border-white/10 sticky top-0 z-10 bg-black/40 backdrop-blur">
         <div className="container flex h-14 items-center justify-between">
-          <Link to="/" className="font-semibold">MCP Proxy</Link>
+          <Link to="/" className="font-semibold">MCP Proxy 0.1.0</Link>
           <div className="flex items-center gap-6 text-sm">
             <nav className="flex items-center gap-6 text-sm">
               <NavLink to="/" className={({isActive}) => isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200 transition'}>Catalogue</NavLink>
@@ -149,7 +149,12 @@ function UserMenu({ email, onLogout }: { email: string; onLogout: ()=>void }) {
   const username = getBasicUsername()
   return (
     <div className="relative">
-      <button onClick={()=>setOpen(v=>!v)} className="px-2 py-1 rounded border hover:bg-white/5 hover:border-white/20 transition focus:outline-none focus:ring-2 focus:ring-white/20">Login Details</button>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="px-2 py-1 rounded border border-white/15 text-slate-200 hover:bg-white/5 hover:border-white/25 transition focus:outline-none focus:ring-2 focus:ring-white/15"
+      >
+        Login Details
+      </button>
       {open && (
         <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/15 bg-black/90 backdrop-blur p-3 shadow-2xl">
           <div className="text-xs text-slate-400 mb-1">Signed in as</div>

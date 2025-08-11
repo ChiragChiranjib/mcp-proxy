@@ -39,7 +39,7 @@ func addAuthRoutes(r *mux.Router, deps Deps, cfg Config) {
 			}
 
 			WriteJSON(w, http.StatusOK,
-				map[string]string{"user_id": uid, "email": u.Username})
+				map[string]string{"user_id": uid, "email": u.Username, "role": u.Role})
 		}).Methods(http.MethodGet)
 	// exchange Google ID token for app session
 	r.HandleFunc(cfg.AdminPrefix+"/auth/google",

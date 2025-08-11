@@ -13,9 +13,10 @@ export function VirtualServers() {
   const [toolsByVS, setToolsByVS] = useState<Record<string, Tool[]>>({})
   const [vsToolsVisible, setVsToolsVisible] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState<Record<string, boolean>>({})
+  const [role, setRole] = useState<string | undefined>(undefined)
 
   const load = () => { api.listVS().then(r=>setItems(r.items)) }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); api.me().then(m=>setRole((m as any).role)).catch(()=>{}) }, [])
 
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -146,6 +147,11 @@ export function VirtualServers() {
                 >
                   {vsToolsVisible[vs.id] ? 'Hide tools' : 'Show tools'}
                 </button>
+                <button
+                  disabled={role !== 'ADMIN'}
+                  title={role==='ADMIN' ? 'Edit virtual server (admin)' : 'Admin only'}
+                  className={`text-xs px-2 py-1 rounded border border-white/10 ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'}`}
+                >Edit</button>
                 <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-white/10">
                   <span className={`inline-block w-2 h-2 rounded-full ${vs.status==='ACTIVE'?'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]':'bg-slate-500'}`} />
                   <span className={`${vs.status==='ACTIVE'?'text-emerald-300':'text-slate-300'}`}>{vs.status}</span>

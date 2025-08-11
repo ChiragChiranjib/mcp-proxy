@@ -8,10 +8,20 @@ export function Catalogue() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [role, setRole] = useState<string | undefined>(undefined)
+  const [addOpen, setAddOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editOpen, setEditOpen] = useState<null | CatalogServer>(null)
+  const [editUrl, setEditUrl] = useState('')
+  const [editDesc, setEditDesc] = useState('')
 
   useEffect(() => {
     setLoading(true)
     api.listCatalog().then(r => setData(r.items)).catch(e => setError(String(e))).finally(() => setLoading(false))
+    api.me().then(m=>setRole((m as any).role)).catch(()=>{})
   }, [])
 
   const [hubIds, setHubIds] = useState<Set<string>>(new Set())
@@ -26,9 +36,24 @@ export function Catalogue() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Catalogue</h1>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." className="border border-white/10 rounded px-3 py-2 bg-black/30 text-slate-200 placeholder:text-slate-500" />
+        <div className="flex items-center gap-2">
+          <input
+            value={q}
+            onChange={e=>setQ(e.target.value)}
+            placeholder="Search..."
+            className="h-10 border border-white/10 rounded-lg px-3 bg-black/30 text-slate-200 placeholder:text-slate-500"
+          />
+          <button
+            disabled={role !== 'ADMIN'}
+            onClick={()=>setAddOpen(true)}
+            className={`h-10 px-4 rounded-lg border border-white/10 text-sm ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'}`}
+            title={role==='ADMIN' ? 'Add MCP Server' : 'Admin only'}
+          >
+            Add
+          </button>
+        </div>
       </div>
       {loading && <div className="animate-pulse text-slate-500">Loading servers...</div>}
       {error && <div className="text-red-500">{error}</div>}
@@ -40,7 +65,14 @@ export function Catalogue() {
             }} />
             <div className="flex items-center justify-between">
               <div className="font-medium">{s.name}</div>
-              <a href={s.url} target="_blank" className="text-xs text-blue-600">Open</a>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={role !== 'ADMIN'}
+                  onClick={()=>{ setEditOpen(s); setEditUrl(s.url); setEditDesc(s.description||'') }}
+                  className={`text-xs px-2 py-1 rounded border border-white/10 ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'}`}
+                  title={role==='ADMIN' ? 'Edit' : 'Admin only'}
+                >Edit</button>
+              </div>
             </div>
             <p className="text-sm text-slate-400 mt-1 line-clamp-3">{s.description || '—'}</p>
             <details className="mt-2">
@@ -54,6 +86,140 @@ export function Catalogue() {
           </div>
         ))}
       </div>
+      {/* Add catalog modal */}
+      {addOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-[min(560px,95vw)] rounded-2xl border border-white/10 bg-gradient-to-b from-blue-950/60 to-slate-900/80 shadow-2xl">
+            <div className="p-5 md:p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">Add MCP Server</div>
+                <button onClick={()=>setAddOpen(false)} className="px-2 py-1 rounded border border-white/10 hover:bg-white/10">Close</button>
+              </div>
+              <div className="grid gap-3">
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">Name</label>
+                  <input value={name} onChange={e=>setName(e.target.value)} className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="Name" />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">URL</label>
+                  <input
+                    value={url}
+                    onChange={e=>setUrl(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    placeholder="Provide the streamable MCP Server endpoint"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">Description</label>
+                  <input value={description} onChange={e=>setDescription(e.target.value)} className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="What this server provides" />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-white/10 bg-black/20 flex justify-end gap-2">
+              <button onClick={()=>setAddOpen(false)} className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25 transition">Cancel</button>
+              <button
+                disabled={saving || !name || !url || !description}
+                onClick={async()=>{
+                  setSaving(true)
+                  try{
+                    await api.addCatalog({ name, url: url.trim(), description })
+                    setAddOpen(false)
+                    setName(''); setUrl(''); setDescription('')
+                    setLoading(true)
+                    const r = await api.listCatalog();
+                    setData(r.items)
+                  }catch(e:any){ notifyError(e?.message||'Failed to add server') } finally { setSaving(false) }
+                }}
+                className={`px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white ${saving || !name || !url || !description ? 'opacity-60 cursor-not-allowed' : 'hover:from-blue-400 hover:to-indigo-400'} transition`}
+              >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit catalog modal */}
+      {editOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-[min(560px,95vw)] rounded-2xl border border-white/10 bg-gradient-to-b from-blue-950/60 to-slate-900/80 shadow-2xl">
+            <div className="p-5 md:p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">Edit {editOpen.name}</div>
+                <button onClick={()=>setEditOpen(null)} className="px-2 py-1 rounded border border-white/10 hover:bg-white/10">Close</button>
+              </div>
+              <div className="grid gap-3">
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">URL</label>
+                  <input value={editUrl} onChange={e=>setEditUrl(e.target.value)} className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="URL" />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">Description</label>
+                  <input value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="Description" />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-white/10 bg-black/20 flex justify-end gap-2">
+              <button onClick={()=>setEditOpen(null)} className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25 transition">Cancel</button>
+              <button
+                onClick={async()=>{
+                  if (!editOpen) return
+                  try {
+                    await api.updateCatalog(editOpen.id, { url: editUrl.trim() || undefined, description: editDesc })
+                    notifySuccess('Updated')
+                    setEditOpen(null)
+                    const r = await api.listCatalog();
+                    setData(r.items)
+                  } catch(e:any) { notifyError(e?.message || 'Failed to update') }
+                }}
+                className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-400 hover:to-indigo-400 transition"
+              >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// URL validation removed as per latest requirement
+
+function AddCatalogButton({ disabled, onAdded }: { disabled?: boolean; onAdded?: ()=>void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  if (disabled) {
+    return <button disabled className="text-xs px-3 py-1.5 rounded border border-white/10 text-slate-500 cursor-not-allowed">Add</button>
+  }
+  return (
+    <div>
+      {!open ? (
+        <button onClick={()=>setOpen(true)} className="text-xs px-3 py-1.5 rounded border border-white/10 hover:bg-white/10 hover:border-white/20">Add</button>
+      ) : (
+        <div className="absolute right-6 mt-2 z-20 w-[min(420px,95vw)] rounded-xl border border-white/10 bg-black/80 backdrop-blur p-3 shadow-xl">
+          <div className="text-sm font-medium mb-2">Add MCP Server</div>
+          <div className="grid gap-2">
+            <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="Name" value={name} onChange={e=>setName(e.target.value)} />
+            <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="URL" value={url} onChange={e=>setUrl(e.target.value)} />
+            <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="Description (optional)" value={description} onChange={e=>setDescription(e.target.value)} />
+          </div>
+          <div className="mt-3 flex gap-2 justify-end">
+            <button onClick={()=>setOpen(false)} className="text-xs px-3 py-1.5 rounded border border-white/10 hover:bg-white/10 hover:border-white/20">Cancel</button>
+            <button
+              disabled={saving || !name || !url}
+              onClick={async()=>{
+                setSaving(true)
+                try{
+                  await api.addCatalog({ name, url, description })
+                  setOpen(false)
+                  onAdded && onAdded()
+                }catch(e:any){ notifyError(e?.message||'Failed to add server') } finally { setSaving(false) }
+              }}
+              className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+            >Save</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

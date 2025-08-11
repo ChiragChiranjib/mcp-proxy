@@ -41,3 +41,15 @@ func (s *Service) Add(ctx context.Context, srv m.MCPServer) error {
 	defer cancel()
 	return s.repo.CreateCatalogServer(ctx, srv)
 }
+
+// Update modifies URL and/or description of a catalog server.
+func (s *Service) Update(
+	ctx context.Context,
+	id string,
+	url string,
+	description string,
+) error {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.UpdateCatalogServerURLDesc(ctx, id, url, description)
+}

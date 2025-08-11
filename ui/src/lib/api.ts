@@ -65,8 +65,11 @@ export const api = {
   loginWithGoogle: (credential: string) => http<{user_id: string; email: string; name?: string}>('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
   logout: () => http<void>('/api/auth/logout', { method: 'POST' }),
   loginWithBasic: (username: string, password: string) => http<{user_id: string; email: string}>('/api/auth/basic', { method: 'POST', body: JSON.stringify({ username, password }) }),
-  me: () => http<{user_id: string; email?: string; name?: string}>('/api/auth/me'),
+  me: () => http<{user_id: string; email?: string; name?: string; role?: string}>('/api/auth/me'),
   listCatalog: () => http<{items: CatalogServer[]}>('/api/catalog/servers'),
+  addCatalog: (body: { name: string; url: string; description?: string }) => http<{id: string}>('/api/catalog/servers', { method: 'POST', body: JSON.stringify(body) }),
+  updateCatalog: (id: string, body: { url?: string; description?: string }) =>
+    http<{ok: boolean}>(`/api/catalog/servers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   listHubs: () => http<{items: HubServer[]}>('/api/hub/servers'),
   addHub: (body: any) => http<{id: string}>('/api/hub/servers', { method: 'POST', body: JSON.stringify(body) }),
   deleteHub: (id: string) => http<{ok: string}>(`/api/hub/servers/${id}`, { method: 'DELETE' }),

@@ -11,6 +11,7 @@ export function Hub() {
   const [toolsByHub, setToolsByHub] = useState<Record<string, Tool[]>>({})
   const [loadingHubTools, setLoadingHubTools] = useState<Record<string, boolean>>({})
   const [hubQuery, setHubQuery] = useState<Record<string, string>>({})
+  const [role, setRole] = useState<string | undefined>(undefined)
 
   const load = () => {
     setReloading(true)
@@ -19,7 +20,7 @@ export function Hub() {
       .catch((e:any) => notifyError(e?.message || 'Failed to load hubs'))
       .finally(() => setReloading(false))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); api.me().then(m=>setRole((m as any).role)).catch(()=>{}) }, [])
 
   const toggleHub = async (hubId: string) => {
     setOpen(s => ({ ...s, [hubId]: !s[hubId] }))
@@ -62,28 +63,42 @@ export function Hub() {
         <div className="flex items-center gap-2">
           <button
             onClick={load}
-            className="px-3 py-1.5 rounded-lg border border-white/10 bg-transparent text-slate-300 active:scale-95 transition flex items-center gap-2 hover:bg-white/5 hover:border-white/20 hover:text-slate-100 focus:outline-none focus:ring-1 focus:ring-white/10 group"
+            className="relative px-3 py-1.5 rounded-lg border border-white/10
+            bg-transparent text-slate-300 active:scale-95 transition flex
+            items-center gap-2 hover:bg-white/5 hover:border-white/20
+            hover:text-slate-100 focus:outline-none focus:ring-1
+            focus:ring-white/10 group"
           >
             <span
               aria-hidden
-              className={`${reloading ? 'animate-spin' : 'group-hover:rotate-12'} inline-block transition-all`}
-            >⟳</span>
+              className={`${reloading ? 'animate-spin'
+                : 'group-hover:rotate-12'} inline-flex items-center
+                justify-center w-5 h-5 text-lg transition-all`}
+            >
+              ⟳
+            </span>
             <span>Refresh</span>
+            <span className="relative inline-flex items-center ml-2 group/inf">
+              <span
+                className="inline-flex items-center justify-center w-4 h-4
+                rounded-full border border-white/20 text-[10px] leading-none
+                not-italic text-slate-200"
+              >
+                i
+              </span>
+              <span
+                role="tooltip"
+                className="absolute left-1/2 -translate-x-1/2 top-full mt-2
+                whitespace-nowrap rounded-md border border-white/10
+                bg-black/85 px-2.5 py-1 text-xs text-slate-200 shadow-xl
+                opacity-0 pointer-events-none translate-y-1 transition
+                group-hover/inf:opacity-100 group-hover/inf:translate-y-0"
+              >
+                Refreshes the hub list only. To refresh tools for a hub, use
+                “Refresh Tools” on that hub card.
+              </span>
+            </span>
           </button>
-          <div className="relative group">
-            <button
-              className="text-[11px] w-6 h-6 inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 text-slate-300 hover:bg-white/10 hover:border-white/25 focus:outline-none focus:ring-1 focus:ring-white/15"
-              aria-label="Info"
-            >
-              i
-            </button>
-            <div
-              role="tooltip"
-              className="absolute left-1/2 -translate-x-1/2 top-full mt-2 whitespace-nowrap rounded-md border border-white/10 bg-black/80 px-2.5 py-1 text-xs text-slate-200 shadow-xl opacity-0 pointer-events-none translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0"
-            >
-              Refreshes servers only; does not refresh tools
-            </div>
-          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4">
@@ -100,6 +115,11 @@ export function Hub() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  disabled={role !== 'ADMIN'}
+                  title={role==='ADMIN' ? 'Edit server (admin)' : 'Admin only'}
+                  className={`text-xs px-2 py-1 rounded border border-white/10 ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'}`}
+                >Edit</button>
                 <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-white/10">
                   <span className={`inline-block w-2 h-2 rounded-full ${h.status==='ACTIVE'?'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]':'bg-slate-500'}`} />
                   <span className={`${h.status==='ACTIVE'?'text-emerald-300':'text-slate-300'}`}>{h.status}</span>
