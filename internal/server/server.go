@@ -10,8 +10,9 @@ import (
 	cfgpkg "github.com/ChiragChiranjib/mcp-proxy/internal/config"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
+	catalogOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
-	orchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
+	mcphubOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
 	usersvc "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/user"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/virtualmcp"
@@ -25,15 +26,16 @@ type Server struct {
 
 // Deps enumerates dependencies required to assemble the server.
 type Deps struct {
-	Logger       *slog.Logger
-	Tools        *tool.Service
-	Hubs         *mcphub.Service
-	Virtual      *virtualmcp.Service
-	Catalog      *catalog.Service
-	Encrypter    *encryptor.AESEncrypter
-	UserService  *usersvc.Service
-	Orchestrator *orchestrator.Orchestrator
-	AppConfig    *cfgpkg.Config
+	Logger              *slog.Logger
+	Tools               *tool.Service
+	Hubs                *mcphub.Service
+	Virtual             *virtualmcp.Service
+	Catalog             *catalog.Service
+	Encrypter           *encryptor.AESEncrypter
+	UserService         *usersvc.Service
+	McphubOrchestrator  *mcphubOrchestrator.Orchestrator
+	CatalogOrchestrator *catalogOrchestrator.Orchestrator
+	AppConfig           *cfgpkg.Config
 }
 
 // Config holds HTTP wiring configuration.

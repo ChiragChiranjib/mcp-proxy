@@ -88,30 +88,26 @@ func (s *Service) GetByModifiedName(
 	return r, nil
 }
 
-// ListForUserFiltered filters tools by hub, status, and query.
+// ListForUserFiltered filters tools by server, hub, status, and query.
 func (s *Service) ListForUserFiltered(
 	ctx context.Context,
-	userID, hubServerID, status, q string,
+	userID, serverID, hubServerID, status, q string,
 ) ([]m.MCPTool, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
-	tools, err := s.repo.ListUserToolsFiltered(ctx, userID, hubServerID, status, q)
+	tools, err := s.repo.ListUserToolsFilteredWithHub(ctx, userID, serverID, hubServerID, status, q)
 	if err != nil {
 		return nil, err
 	}
 	return tools, nil
 }
 
-// ListActiveForHub returns active tools for a hub server.
-func (s *Service) ListActiveForHub(
+// ListGlobalToolsForServer returns global tools for a specific server.
+func (s *Service) ListGlobalToolsForServer(
 	ctx context.Context,
-	hubServerID string,
+	serverID string,
 ) ([]m.MCPTool, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
-	tools, err := s.repo.ListActiveToolsForHub(ctx, hubServerID)
-	if err != nil {
-		return nil, err
-	}
-	return tools, nil
+	return s.repo.ListGlobalToolsForServer(ctx, serverID)
 }

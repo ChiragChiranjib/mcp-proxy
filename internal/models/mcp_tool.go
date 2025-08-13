@@ -5,13 +5,16 @@ import (
 	"time"
 )
 
-// MCPTool represents a discovered tool for a hub server.
+// MCPTool represents a discovered tool for a server.
+// For public servers: UserID is NULL (global tools)
+// For private servers: UserID is set (user-specific tools)
 type MCPTool struct {
 	ID             string          `gorm:"type:char(22);primaryKey" json:"id"`
-	UserID         string          `gorm:"type:char(22)" json:"user_id"`                                     //nolint:lll
+	UserID         *string         `gorm:"type:char(22)" json:"user_id"`                                     //nolint:lll
+	MCPServerID    string          `gorm:"column:mcp_server_id;type:char(22);not null" json:"mcp_server_id"` //nolint:lll
+	MCPHubServerID *string         `gorm:"column:mcp_hub_server_id;type:char(22)" json:"mcp_hub_server_id"`  //nolint:lll
 	OriginalName   string          `gorm:"type:varchar(255);not null" json:"original_name"`                  //nolint:lll
 	ModifiedName   string          `gorm:"type:varchar(255);" json:"modified_name"`                          //nolint:lll
-	MCPHubServerID string          `gorm:"column:mcp_hub_server_id;type:char(22);" json:"mcp_hub_server_id"` //nolint:lll
 	Description    string          `gorm:"type:text" json:"description"`
 	InputSchema    json.RawMessage `gorm:"type:json" json:"input_schema"`
 	Annotations    json.RawMessage `gorm:"type:json" json:"annotations"`

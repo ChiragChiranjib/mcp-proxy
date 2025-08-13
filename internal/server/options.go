@@ -6,8 +6,9 @@ import (
 	cfgpkg "github.com/ChiragChiranjib/mcp-proxy/internal/config"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/encryptor"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
+	catalogOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
-	orchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
+	mcphubOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
 	usersvc "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/user"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/virtualmcp"
@@ -73,7 +74,12 @@ func WithAppConfig(c *cfgpkg.Config) Option {
 	}
 }
 
-// WithOrchestrator ...
-func WithOrchestrator(o *orchestrator.Orchestrator) Option {
-	return func(d *Deps) { d.Orchestrator = o }
+// WithMcphubOrchestrator ...
+func WithMcphubOrchestrator(o *mcphubOrchestrator.Orchestrator) Option {
+	return func(d *Deps) { d.McphubOrchestrator = o }
+}
+
+// WithCatalogOrchestrator ...
+func WithCatalogOrchestrator(o *catalogOrchestrator.Orchestrator) Option {
+	return func(d *Deps) { d.CatalogOrchestrator = o }
 }

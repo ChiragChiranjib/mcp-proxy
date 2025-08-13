@@ -53,3 +53,46 @@ func (r *Repo) UpdateCatalogServerURLDesc(
 		Where("id = ?", id).
 		Updates(updates).Error
 }
+
+// UpdateCatalogServerCapabilities updates capabilities and transport for a catalog server.
+func (r *Repo) UpdateCatalogServerCapabilities(
+	ctx context.Context,
+	id string,
+	capabilities []byte,
+	transport string,
+) error {
+	updates := map[string]any{}
+	if capabilities != nil {
+		updates["capabilities"] = capabilities
+	}
+	if transport != "" {
+		updates["transport"] = transport
+	}
+	if len(updates) == 0 {
+		return errors.New("no fields to update")
+	}
+	return r.WithContext(ctx).
+		Model(&m.MCPServer{}).
+		Where("id = ?", id).
+		Updates(updates).Error
+}
+
+// ListPublicCatalogServers returns all catalog servers with access_type = 'public'.
+func (r *Repo) ListPublicCatalogServers(ctx context.Context) ([]m.MCPServer, error) {
+	var rows []m.MCPServer
+	err := r.WithContext(ctx).
+		Where("access_type = ?", m.AccessTypePublic).
+		Order("name").
+		Find(&rows).Error
+	return rows, err
+}
+
+// ListPrivateCatalogServers returns all catalog servers with access_type = 'private'.
+func (r *Repo) ListPrivateCatalogServers(ctx context.Context) ([]m.MCPServer, error) {
+	var rows []m.MCPServer
+	err := r.WithContext(ctx).
+		Where("access_type = ?", m.AccessTypePrivate).
+		Order("name").
+		Find(&rows).Error
+	return rows, err
+}

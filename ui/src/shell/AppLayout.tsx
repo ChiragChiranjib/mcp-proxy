@@ -1,7 +1,8 @@
+import React from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { setBasicCredentials, clearBasicCredentials, hydrateBasicCredentials, getBasicUsername } from '../lib/auth'
+import { getBasicUsername } from '../lib/auth'
 import { GoogleLogin } from './GoogleLogin'
 import { ToastHost } from '../components/ToastHost'
 import { LogoMark } from '../components/LogoMark'
@@ -17,13 +18,12 @@ export function AppLayout() {
 
   useEffect(() => {
     // Check session on load
-    hydrateBasicCredentials()
     api.me().then((m) => {
       const serverEmail = (m as any)?.email as string | undefined
       if (serverEmail) {
         try { localStorage.setItem('user-email', serverEmail) } catch {}
       }
-      const fallback = localStorage.getItem('user-email') || getBasicUsername() || undefined
+      const fallback = localStorage.getItem('user-email') || undefined
       const email = serverEmail || fallback
       setUser({ email, userId: (m as any).user_id, role: (m as any).role })
     }).catch(() => {
@@ -63,15 +63,11 @@ export function AppLayout() {
     e.preventDefault()
     setErr('')
     try {
-      // Preload basic auth so middleware accepts the login route as well
-      setBasicCredentials(basicU, basicP, true)
       const data = await api.loginWithBasic(basicU, basicP)
       setUser({ email: data.email, userId: (data as any).user_id })
       if (data.email) localStorage.setItem('user-email', data.email)
     } catch (e) {
       setErr('Invalid username or password')
-      // clear preloaded creds on failure
-      clearBasicCredentials()
     }
   }
 
@@ -191,7 +187,7 @@ function UserMenu({ email, onLogout }: { email: string; onLogout: ()=>void }) {
           <div className="mt-3 flex justify-end">
             <button
               className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500/30 active:scale-95 transition"
-              onClick={() => { clearBasicCredentials(); onLogout() }}
+              onClick={onLogout}
               title="Sign out"
             >
               Logout

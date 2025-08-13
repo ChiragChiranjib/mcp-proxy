@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useEffect as ReactUseEffect } from 'react'
+import React, { useEffect, useMemo, useState, useEffect as ReactUseEffect } from 'react'
 import { api, VirtualServer, Tool, HubServer, CatalogServer } from '../lib/api'
 import { notifyError, notifySuccess } from '../components/ToastHost'
 
@@ -25,17 +25,34 @@ export function VirtualServers() {
   const [createQ, setCreateQ] = useState('')
   const [createGroups, setCreateGroups] = useState<Array<{server: string; tools: Tool[]}>>([])
 
+  // Edit state
+  const [editOpen, setEditOpen] = useState<VirtualServer | null>(null)
+  const [editName, setEditName] = useState('')
+  const [saving, setSaving] = useState(false)
+
   const create = async () => {
     setCreateOpen(true)
     setCreateSelected([])
     setCreateQ('')
-    // Fetch all tools grouped by server for current user
+    // Fetch tools from user's hub servers only
     try {
-      const qp = new URLSearchParams()
-      const res = await api.listTools(qp)
+      // Get user's hub servers first to filter tools
+      const hubsRes = await api.listHubs()
+      const hubServerIds = hubsRes.items.map(h => h.mcp_server_id)
+      
+      // Load tools only for servers in user's hub
+      const toolsPromises = hubServerIds.map(serverId => {
+        const qp = new URLSearchParams()
+        qp.set('server_id', serverId)
+        return api.listTools(qp)
+      })
+      
+      const toolsResults = await Promise.all(toolsPromises)
+      const allHubTools = toolsResults.flatMap(res => res.items)
+      
       // group by server prefix from modified_name
       const m = new Map<string, Tool[]>()
-      for (const t of res.items) {
+      for (const t of allHubTools) {
         const name = t.modified_name || ''
         const idx = name.lastIndexOf('-')
         const server = idx > 0 ? name.substring(0, idx) : 'unknown'
@@ -68,11 +85,23 @@ export function VirtualServers() {
 
   const openToolPicker = async (vs: VirtualServer) => {
     try {
-      const qp = new URLSearchParams()
-      const [toolsRes, hubsRes, catRes] = await Promise.all([
-        api.listTools(qp), api.listHubs(), api.listCatalog()
+      // First get hub servers to filter tools
+      const [hubsRes, catRes] = await Promise.all([
+        api.listHubs(), api.listCatalog()
       ])
-      setTools(toolsRes.items)
+      
+      // Load tools only for servers in user's hub
+      const hubServerIds = hubsRes.items.map(h => h.mcp_server_id)
+      const toolsPromises = hubServerIds.map(serverId => {
+        const qp = new URLSearchParams()
+        qp.set('server_id', serverId)
+        return api.listTools(qp)
+      })
+      
+      const toolsResults = await Promise.all(toolsPromises)
+      const allHubTools = toolsResults.flatMap(res => res.items)
+      
+      setTools(allHubTools)
       setHubs(hubsRes.items)
       setCatalog(catRes.items)
       setSelected([])
@@ -149,6 +178,7 @@ export function VirtualServers() {
                 </button>
                 <button
                   disabled={role !== 'ADMIN'}
+                  onClick={() => { setEditOpen(vs); setEditName(vs.name || '') }}
                   title={role==='ADMIN' ? 'Edit virtual server (admin)' : 'Admin only'}
                   className={`text-xs px-2 py-1 rounded border border-white/10 ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'}`}
                 >Edit</button>
@@ -255,14 +285,14 @@ export function VirtualServers() {
                     <option value="">All hubs</option>
                     {hubs.map(h => (
                       <option key={h.id} value={h.id}>
-                        {catalog.find(c=>c.id===h.mcp_server_id)?.name || h.server_name || h.id}
+                        {catalog.find(c=>c.id===h.mcp_server_id)?.name || h.name || h.id}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="h-72 overflow-y-auto pr-1 space-y-1 scroll-panel">
                   {tools
-                    .filter(t => (hubFilter ? (t.mcp_hub_server_id || t.hub_server_id) === hubFilter : true))
+                    .filter(t => (hubFilter ? t.mcp_server_id === hubFilter : true))
                     .filter(t => t.modified_name.toLowerCase().includes(q.toLowerCase()) || (t.original_name||'').toLowerCase().includes(q.toLowerCase()))
                     .map(t => (
                       <label
@@ -386,6 +416,61 @@ export function VirtualServers() {
               >
                 {creating ? 'Creating...' : 'Create'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit virtual server modal */}
+      {editOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-[min(480px,95vw)] rounded-2xl border border-white/10 bg-gradient-to-b from-blue-950/60 to-slate-900/80 shadow-2xl">
+            <div className="p-5 md:p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Edit Virtual Server</h3>
+                <button onClick={() => { setEditOpen(null); setEditName('') }} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Enter server name"
+                    className="w-full px-3 py-2 rounded-lg border border-white/10 bg-black/30 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button 
+                  onClick={() => { setEditOpen(null); setEditName('') }}
+                  className="px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 hover:border-white/20 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={saving || !editName.trim()}
+                  onClick={async () => {
+                    if (!editOpen || !editName.trim()) return
+                    setSaving(true)
+                    try {
+                      await api.updateVS(editOpen.id, editName.trim())
+                      setEditOpen(null)
+                      setEditName('')
+                      load() // Refresh the list
+                      notifySuccess('Virtual server updated successfully')
+                    } catch (e: any) {
+                      notifyError(e?.message || 'Failed to update virtual server')
+                    } finally {
+                      setSaving(false)
+                    }
+                  }}
+                  className={`px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white ${saving || !editName.trim() ? 'opacity-60 cursor-not-allowed' : 'hover:from-blue-400 hover:to-indigo-400'} transition`}
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

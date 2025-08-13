@@ -31,7 +31,6 @@ type Orchestrator struct {
 type CreateMCPHubServer struct {
 	UserID      string          `json:"user_id,omitempty"`
 	MCPServerID string          `json:"mcp_server_id"`
-	Transport   string          `json:"transport"`
 	AuthType    m.AuthType      `json:"auth_type"`
 	AuthValue   json.RawMessage `json:"auth_value"`
 }
@@ -60,7 +59,7 @@ func (o *Orchestrator) AddHub(
 	o.logger.Info("ORCH_ADD_HUB_INIT",
 		"user_id", req.UserID,
 		"mcp_server_id", req.MCPServerID,
-		"transport", req.Transport,
+		"auth_type", req.AuthType,
 	)
 	// Resolve MCP server URL and name from catalog via repo
 	srv, err := o.repo.GetCatalogServerByID(ctx, req.MCPServerID)
@@ -76,66 +75,70 @@ func (o *Orchestrator) AddHub(
 	// Build hub model
 	hubID := idgen.NewID()
 	hub := m.MCPHubServer{
-		ID:           hubID,
-		UserID:       req.UserID,
-		MCPServerID:  req.MCPServerID,
-		Status:       m.StatusActive,
-		Transport:    req.Transport,
-		Capabilities: nil,
-		AuthType:     req.AuthType,
-		AuthValue:    req.AuthValue,
+		ID:          hubID,
+		UserID:      req.UserID,
+		MCPServerID: req.MCPServerID,
+		Status:      m.StatusActive,
+		AuthType:    req.AuthType,
+		AuthValue:   req.AuthValue,
 	}
 
-	headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &hub)
-
-	// Fetch capabilities via init and tools via client
-	o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL)
-	caps, err := mcpclient.InitCapabilities(ctx, serverURL, headers)
-	if err != nil {
-		o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
-		return "", err
-	}
-	hub.Capabilities = caps
-	o.logger.Info("ORCH_INIT_CAPABILITIES_SUCCESS", "len", len(caps))
-
-	o.logger.Info("ORCH_LIST_TOOLS_INIT")
-	toolsRes, err := mcpclient.ListTools(ctx, serverURL, headers)
-	if err != nil {
-		o.logger.Error("ORCH_LIST_TOOLS_ERROR", "error", err)
-		return "", err
-	}
-	o.logger.Info("ORCH_LIST_TOOLS_SUCCESS", "tool_count", len(toolsRes.Tools))
-
-	// Encrypt bearer token if provided
-	if req.AuthType == m.AuthTypeBearer &&
+	// Encrypt auth value if provided (both bearer tokens and custom headers)
+	if (req.AuthType == m.AuthTypeBearer || req.AuthType == m.AuthTypeCustomHeaders) &&
 		len(req.AuthValue) > 0 && o.encr != nil {
-		o.logger.Info("ORCH_ENCRYPT_BEARER_INIT")
+		o.logger.Info("ORCH_ENCRYPT_AUTH_INIT", "auth_type", req.AuthType)
 		enc, err := o.encr.EncryptToJSON(req.AuthValue)
 		if err != nil {
-			o.logger.Error("ORCH_ENCRYPT_BEARER_ERROR", "error", err)
+			o.logger.Error("ORCH_ENCRYPT_AUTH_ERROR", "error", err, "auth_type", req.AuthType)
 			return "", err
 		}
 		hub.AuthValue = enc
-		o.logger.Info("ORCH_ENCRYPT_BEARER_SUCCESS", "len", len(enc))
+		o.logger.Info("ORCH_ENCRYPT_AUTH_SUCCESS", "len", len(enc), "auth_type", req.AuthType)
 	}
 
-	// Build tool models
+	// For public servers, skip tool fetching since global tools already exist
+	// For private servers, fetch capabilities and tools with user-specific auth
 	var toolModels []m.MCPTool
-	for _, t := range toolsRes.Tools {
-		mod := serverName + "-" + t.Name
-		schemaJSON, _ := json.Marshal(t.InputSchema)
-		annotationsJSON, _ := json.Marshal(t.Annotations)
-		toolModels = append(toolModels, m.MCPTool{
-			ID:             idgen.NewID(),
-			UserID:         req.UserID,
-			OriginalName:   t.Name,
-			ModifiedName:   mod,
-			MCPHubServerID: hubID,
-			Description:    t.Description,
-			InputSchema:    schemaJSON,
-			Annotations:    annotationsJSON,
-			Status:         m.StatusActive,
-		})
+	if srv.AccessType == m.AccessTypePrivate {
+		headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &hub)
+
+		// Fetch capabilities via init and tools via client
+		o.logger.Info("ORCH_INIT_CAPABILITIES_INIT", "server_url", serverURL, "access_type", srv.AccessType)
+		caps, err := mcpclient.InitCapabilities(ctx, serverURL, headers)
+		if err != nil {
+			o.logger.Error("ORCH_INIT_CAPABILITIES_ERROR", "error", err)
+			return "", err
+		}
+		o.logger.Info("ORCH_INIT_CAPABILITIES_SUCCESS", "len", len(caps))
+
+		o.logger.Info("ORCH_LIST_TOOLS_INIT")
+		toolsRes, err := mcpclient.ListTools(ctx, serverURL, headers)
+		if err != nil {
+			o.logger.Error("ORCH_LIST_TOOLS_ERROR", "error", err)
+			return "", err
+		}
+		o.logger.Info("ORCH_LIST_TOOLS_SUCCESS", "tool_count", len(toolsRes.Tools))
+
+		// Build tool models (user-specific tools for private servers)
+		for _, t := range toolsRes.Tools {
+			mod := serverName + "-" + t.Name
+			schemaJSON, _ := json.Marshal(t.InputSchema)
+			annotationsJSON, _ := json.Marshal(t.Annotations)
+			toolModels = append(toolModels, m.MCPTool{
+				ID:             idgen.NewID(),
+				UserID:         &req.UserID, // User-specific tool
+				MCPServerID:    req.MCPServerID,
+				MCPHubServerID: &hubID, // Link to the hub server
+				OriginalName:   t.Name,
+				ModifiedName:   mod,
+				Description:    t.Description,
+				InputSchema:    schemaJSON,
+				Annotations:    annotationsJSON,
+				Status:         m.StatusActive,
+			})
+		}
+	} else {
+		o.logger.Info("ORCH_SKIP_TOOL_FETCH", "access_type", srv.AccessType, "reason", "global tools already exist")
 	}
 	o.logger.Info("ORCH_BUILD_TOOL_MODELS_SUCCESS", "count", len(toolModels))
 
@@ -177,7 +180,14 @@ func (o *Orchestrator) RefreshHub(
 
 	serverURL := info.URL
 	serverName := info.Name
-	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_INIT")
+
+	// For public servers, tools are managed globally, not per hub
+	if info.AccessType == m.AccessTypePublic {
+		o.logger.Info("ORCH_REFRESH_SKIP_PUBLIC", "access_type", info.AccessType, "reason", "public servers managed globally")
+		return nil, nil, nil // No tools to add/delete for public servers
+	}
+
+	o.logger.Info("ORCH_REFRESH_LIST_TOOLS_INIT", "access_type", info.AccessType)
 	headers := mcpclient.BuildUpstreamHeaders(o.logger, o.encr, &info.MCPHubServer)
 	res, err := mcpclient.ListTools(ctx, serverURL, headers)
 	if err != nil {
@@ -192,11 +202,11 @@ func (o *Orchestrator) RefreshHub(
 		desired[serverName+"-"+t.Name] = t
 	}
 
-	// Current set from DB
+	// Current set from DB (user-specific tools for this server)
 	var current []m.MCPTool
 	o.logger.Info("ORCH_REFRESH_DB_LOAD_TOOLS_INIT")
 	if err := o.repo.WithContext(ctx).
-		Where("mcp_hub_server_id = ?", hubID).
+		Where("mcp_server_id = ? AND user_id = ?", info.MCPServerID, userID).
 		Find(&current).Error; err != nil {
 		o.logger.Error("ORCH_REFRESH_DB_LOAD_TOOLS_ERROR", "error", err)
 		return nil, nil, err
@@ -221,10 +231,11 @@ func (o *Orchestrator) RefreshHub(
 
 			toInsert = append(toInsert, m.MCPTool{
 				ID:             idgen.NewID(),
-				UserID:         userID,
+				UserID:         &userID, // User-specific tool
+				MCPServerID:    info.MCPServerID,
+				MCPHubServerID: &hubID, // Link to the hub server
 				OriginalName:   dtool.Name,
 				ModifiedName:   serverName + "-" + dtool.Name,
-				MCPHubServerID: hubID,
 				Description:    dtool.Description,
 				InputSchema:    dtool.RawInputSchema,
 				Annotations:    annotationsJSON,

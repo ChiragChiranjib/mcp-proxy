@@ -83,6 +83,23 @@ func (s *Service) ListForUser(
 	return rows, nil
 }
 
+// GetByServerAndUser gets a hub server by server ID and user ID.
+func (s *Service) GetByServerAndUser(
+	ctx context.Context, serverID, userID string) (m.MCPHubServerAggregate, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	s.logger.Info("MCP_HUB_GET_BY_SERVER_AND_USER_INIT",
+		"server_id", serverID, "user_id", userID)
+
+	result, err := s.repo.GetHubServerByServerAndUser(ctx, serverID, userID)
+	if err != nil {
+		s.logger.Error("MCP_HUB_GET_BY_SERVER_AND_USER_ERROR", "error", err)
+		return m.MCPHubServerAggregate{}, err
+	}
+	s.logger.Info("MCP_HUB_GET_BY_SERVER_AND_USER_OK", "hub_id", result.ID)
+	return result, nil
+}
+
 // SetStatus updates hub server status.
 func (s *Service) SetStatus(
 	ctx context.Context, id string, status string) error {

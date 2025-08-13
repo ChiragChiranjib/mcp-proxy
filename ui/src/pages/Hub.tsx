@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api, HubServer, Tool } from '../lib/api'
 import { notifyError, notifySuccess } from '../components/ToastHost'
 import { JSONViewer } from '../components/JSONViewer'
@@ -16,7 +16,7 @@ export function Hub() {
   const load = () => {
     setReloading(true)
     api.listHubs()
-      .then(r => setItems(r.items as any))
+      .then(r => setItems((r.items || []) as any))
       .catch((e:any) => notifyError(e?.message || 'Failed to load hubs'))
       .finally(() => setReloading(false))
   }
@@ -33,10 +33,16 @@ export function Hub() {
   const loadToolsForHub = async (hubId: string) => {
     setLoadingHubTools(s => ({ ...s, [hubId]: true }))
     try {
+      // Find the hub to get its mcp_server_id
+      const hub = items.find(h => h.id === hubId)
+      if (!hub?.mcp_server_id) {
+        throw new Error('Hub server ID not found')
+      }
+      
       const qp = new URLSearchParams()
-      qp.set('hub_server_id', hubId)
+      qp.set('server_id', hub.mcp_server_id)  // Changed from hub_server_id to server_id
       const r = await api.listTools(qp)
-      setToolsByHub(s => ({ ...s, [hubId]: r.items }))
+      setToolsByHub(s => ({ ...s, [hubId]: r.items || [] }))
     } catch (e: any) {
       notifyError(e?.message || 'Failed to load tools')
     } finally {
@@ -102,16 +108,16 @@ export function Hub() {
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4">
-        {items.map(h => (
+        {(items || []).map(h => (
           <div key={h.id} className="relative group rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
             <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300" style={{
               background: 'radial-gradient(1000px 300px at 10% -20%, rgba(59,130,246,0.12), transparent 60%), radial-gradient(1000px 300px at 110% 120%, rgba(16,185,129,0.12), transparent 60%)'
             }} />
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium">{h.name || h.server_name || h.mcp_server_id}</div>
-                { (h.url || h.server_url) && (
-                  <a href={h.url || h.server_url} target="_blank" className="text-xs text-blue-500 break-all">{h.url || h.server_url}</a>
+                <div className="font-medium">{h.name || h.mcp_server_id}</div>
+                { h.url && (
+                  <a href={h.url} target="_blank" className="text-xs text-blue-500 break-all">{h.url}</a>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -137,20 +143,14 @@ export function Hub() {
               </div>
             </div>
             {h.description && <p className="text-xs text-slate-400 mt-2">{h.description}</p>}
-            {h.capabilities && (
-              <details className="mt-2">
-                <summary className="text-xs text-slate-400 cursor-pointer">Capabilities</summary>
-                <pre className="text-xs bg-black/30 border border-white/10 rounded p-3 overflow-auto max-h-56">{JSON.stringify(h.capabilities, null, 2)}</pre>
-              </details>
-            )}
             <div className="mt-3 flex gap-2">
               <button onClick={async ()=>{
                 const hubId = (h as any).id || (h as any).mcp_hub_server_id || (h as any).mcp_server_id
                 if (!hubId) { notifyError('Hub id missing'); return }
                 setRefreshingHubId(hubId)
                 try {
-                  await api.refreshHub(hubId)
-                  notifySuccess('Refreshed')
+                  const result = await api.refreshHub(hubId)
+                  notifySuccess(`Refreshed: ${result.total_added} added, ${result.total_deleted} deleted`)
                 } catch (e:any) {
                   notifyError(e?.message || 'Refresh failed')
                 } finally {
@@ -171,7 +171,7 @@ export function Hub() {
               const isOpen = !!open[hubId]
               const q = hubQuery[hubId] || ''
               const tools = toolsByHub[hubId] || []
-              const filtered = tools.filter(t => (
+              const filtered = (tools || []).filter(t => (
                 (t.modified_name||'').toLowerCase().includes(q.toLowerCase()) ||
                 (t.original_name||'').toLowerCase().includes(q.toLowerCase())
               ))
@@ -189,12 +189,12 @@ export function Hub() {
                   {loadingHubTools[hubId] && (
                     <div className="text-xs text-slate-500 mt-3">Loading tools...</div>
                   )}
-                  {!loadingHubTools[hubId] && filtered.length === 0 && (
+                  {!loadingHubTools[hubId] && (filtered || []).length === 0 && (
                     <div className="text-xs text-slate-500 mt-3">No tools found.</div>
                   )}
                   <div className="mt-3 max-h-[420px] overflow-y-auto pr-1 scroll-panel">
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filtered.map(t => (
+                      {(filtered || []).map(t => (
                         <div key={t.id} className="relative group rounded-2xl border border-white/5 bg-white/[0.04] p-4 transition hover:border-white/15 hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
                         <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300" style={{
                           background: 'radial-gradient(1000px 300px at 10% -20%, rgba(59,130,246,0.12), transparent 60%), radial-gradient(1000px 300px at 110% 120%, rgba(16,185,129,0.12), transparent 60%)'

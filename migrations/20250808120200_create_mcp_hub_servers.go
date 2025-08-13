@@ -16,8 +16,6 @@ CREATE TABLE IF NOT EXISTS mcp_hub_servers (
   user_id CHAR(22) NOT NULL,
   mcp_server_id CHAR(22) NOT NULL,
   status VARCHAR(30) NOT NULL,
-  transport VARCHAR(30) NOT NULL,
-  capabilities JSON,
   auth_type VARCHAR(30) NOT NULL,
   auth_value JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

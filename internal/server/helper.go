@@ -1,14 +1,10 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
-	ic "github.com/ChiragChiranjib/mcp-proxy/internal/httpclient"
 	m "github.com/ChiragChiranjib/mcp-proxy/internal/models"
-	mclient "github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -50,56 +46,32 @@ func CreateMCPTool(t m.MCPTool) mcp.Tool {
 	return tool
 }
 
-// callUpstreamTool performs the upstream MCP tool call
-// via mcp-go and returns result.
-func callUpstreamTool(
-	ctx context.Context,
-	deps Deps,
-	serverURL string,
-	headers map[string]string,
-	originalName string,
-	args map[string]any,
-) (*mcp.CallToolResult, error) {
-	deps.Logger.Info(
-		"CALL_UPSTREAM_TOOL_INIT",
-		"tool_name", originalName,
-		"headers_count", len(headers),
-	)
-	// Build HTTP client with headers
-	httpClient := ic.NewHTTPClient(ic.WithHeaders(headers))
-	trans, err := transport.NewStreamableHTTP(serverURL, transport.WithHTTPBasicClient(httpClient))
-	if err != nil {
-		deps.Logger.Error("CREATE_TRANSPORT_ERROR", "error", err)
-		return nil, err
-	}
-	c := mclient.NewClient(trans)
-	if err := c.Start(ctx); err != nil {
-		deps.Logger.Error("UPSTREAM_CLIENT_START_ERROR", "error", err)
-		return nil, err
-	}
-	defer func() { _ = c.Close() }()
-	// Initialize
-	if _, err := c.Initialize(ctx, mcp.InitializeRequest{
-		Request: mcp.Request{Method: string(mcp.MethodInitialize)},
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			ClientInfo:      mcp.Implementation{Name: "mcp-proxy-upstream", Version: "1.0.0"},
-			Capabilities:    mcp.ClientCapabilities{},
-		},
-	}); err != nil {
-		deps.Logger.Error("UPSTREAM_INITIALIZE_ERROR", "error", err)
-		return nil, err
-	}
-	deps.Logger.Info("UPSTREAM_INITIALIZE_OK")
-	// Call tool (use original name expected by upstream)
-	res, err := c.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
-		Name:      originalName,
-		Arguments: args,
-	}})
-	if err != nil {
-		deps.Logger.Error("UPSTREAM_TOOL_CALL_ERROR", "error", err)
-		return nil, err
-	}
-	deps.Logger.Info("UPSTREAM_TOOL_CALL_OK", "tool_name", originalName)
-	return res, nil
+// writeRPCResult writes a JSON-RPC success response.
+func writeRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  any             `json:"result"`
+	}{JSONRPC: "2.0", ID: id, Result: result})
+}
+
+// writeRPCError writes a JSON-RPC error response with a message.
+func writeRPCError(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Error   struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error: struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{Code: code, Message: msg},
+	})
 }

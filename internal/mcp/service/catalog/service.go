@@ -53,3 +53,43 @@ func (s *Service) Update(
 	defer cancel()
 	return s.repo.UpdateCatalogServerURLDesc(ctx, id, url, description)
 }
+
+// UpdateCapabilities modifies capabilities and transport of a catalog server.
+func (s *Service) UpdateCapabilities(
+	ctx context.Context,
+	id string,
+	capabilities []byte,
+	transport string,
+) error {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.UpdateCatalogServerCapabilities(ctx, id, capabilities, transport)
+}
+
+// GetByID returns a catalog server by ID.
+func (s *Service) GetByID(
+	ctx context.Context,
+	id string,
+) (m.MCPServer, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.GetCatalogServerByID(ctx, id)
+}
+
+// ListPublic returns all public catalog servers.
+func (s *Service) ListPublic(
+	ctx context.Context,
+) ([]m.MCPServer, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.ListPublicCatalogServers(ctx)
+}
+
+// ListPrivate returns all private catalog servers.
+func (s *Service) ListPrivate(
+	ctx context.Context,
+) ([]m.MCPServer, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.ListPrivateCatalogServers(ctx)
+}

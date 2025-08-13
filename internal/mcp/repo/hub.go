@@ -36,8 +36,9 @@ func (r *Repo) GetHubServerWithURL(
 	err := r.WithContext(ctx).
 		Table("mcp_hub_servers h").
 		Select("h.id, h.user_id, h.mcp_server_id, h.status, "+
-			"h.transport, h.capabilities, h.auth_type, h.auth_value, h.created_at, "+
-			"h.updated_at, s.name AS name, s.url AS url, s.description AS description").
+			"h.auth_type, h.auth_value, h.created_at, h.updated_at, "+
+			"s.name AS name, s.url AS url, s.description AS description, "+
+			"s.capabilities AS capabilities, s.transport AS transport, s.access_type AS access_type").
 		Joins("JOIN mcp_servers s ON s.id = h.mcp_server_id").
 		Where("h.id = ?", id).Scan(&out).Error
 	return out, err
@@ -49,9 +50,10 @@ func (r *Repo) ListUserHubMCPServers(
 	var rows []m.MCPHubServerAggregate
 	err := r.WithContext(ctx).
 		Table("mcp_hub_servers h").
-		Select("h.id, h.user_id, h.mcp_server_id, h.status,"+
-			"h.transport, h.capabilities, h.auth_type, h.auth_value, h.created_at, "+
-			"h.updated_at, s.name AS name, s.url AS url, s.description AS description").
+		Select("h.id, h.user_id, h.mcp_server_id, h.status, "+
+			"h.auth_type, h.auth_value, h.created_at, h.updated_at, "+
+			"s.name AS name, s.url AS url, s.description AS description, "+
+			"s.capabilities AS capabilities, s.transport AS transport, s.access_type AS access_type").
 		Joins("JOIN mcp_servers s ON s.id = h.mcp_server_id").
 		Where("h.user_id = ?", userID).
 		Scan(&rows).Error
@@ -72,4 +74,22 @@ func (r *Repo) DeleteHubServer(
 	ctx context.Context, id string) error {
 	return r.WithContext(ctx).
 		Delete(&m.MCPHubServer{ID: id}).Error
+}
+
+// GetHubServerByServerAndUser gets a hub server by server ID and user ID.
+func (r *Repo) GetHubServerByServerAndUser(
+	ctx context.Context, serverID, userID string) (m.MCPHubServerAggregate, error) {
+	var result m.MCPHubServerAggregate
+	err := r.WithContext(ctx).
+		Table("mcp_hub_servers h").
+		Select(`
+			h.id, h.user_id, h.mcp_server_id, h.status, h.auth_type, h.auth_value,
+			h.created_at, h.updated_at,
+			s.name AS name, s.url AS url, s.description AS description,
+			s.capabilities AS capabilities, s.transport AS transport, s.access_type AS access_type
+		`).
+		Joins("JOIN mcp_servers s ON h.mcp_server_id = s.id").
+		Where("h.mcp_server_id = ? AND h.user_id = ?", serverID, userID).
+		Take(&result).Error
+	return result, err
 }

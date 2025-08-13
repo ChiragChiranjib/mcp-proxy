@@ -11,13 +11,14 @@
     { "key": "vs_id", "value": "" },
     { "key": "tool_id", "value": "" },
     { "key": "hub_id", "value": "" },
-    { "key": "mcp_server_id", "value": "" }
+    { "key": "mcp_server_id", "value": "" },
+    { "key": "catalog_server_id", "value": "" },
+    { "key": "google_id_token", "value": "" }
   ],
   "auth": {
-    "type": "basic",
-    "basic": [
-      { "key": "username", "value": "{{basic_username}}", "type": "string" },
-      { "key": "password", "value": "{{basic_password}}", "type": "string" }
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{session_token}}", "type": "string" }
     ]
   },
   "item": [
@@ -26,11 +27,19 @@
       "item": [
         {
           "name": "Live",
-          "request": { "method": "GET", "url": "{{baseUrl}}/live" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/live",
+            "auth": { "type": "noauth" }
+          }
         },
         {
           "name": "Ready",
-          "request": { "method": "GET", "url": "{{baseUrl}}/ready" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/ready",
+            "auth": { "type": "noauth" }
+          }
         }
       ]
     },
@@ -39,7 +48,10 @@
       "item": [
         {
           "name": "Me",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/api/auth/me"
+          }
         },
         {
           "name": "Basic Login",
@@ -52,7 +64,8 @@
               "mode": "raw",
               "raw": "{\n  \"username\": \"{{basic_username}}\",\n  \"password\": \"{{basic_password}}\"\n}"
             },
-            "url": "{{baseUrl}}/api/auth/basic"
+            "url": "{{baseUrl}}/api/auth/basic",
+            "auth": { "type": "noauth" }
           }
         },
         {
@@ -64,14 +77,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"credential\": \"<GOOGLE_ID_TOKEN>\"\n}"
+              "raw": "{\n  \"credential\": \"{{google_id_token}}\"\n}"
             },
-            "url": "{{baseUrl}}/api/auth/google"
+            "url": "{{baseUrl}}/api/auth/google",
+            "auth": { "type": "noauth" }
           }
         },
         {
           "name": "Logout",
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/logout" }
+          "request": { 
+            "method": "POST", 
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
         }
       ]
     },
@@ -80,10 +97,13 @@
       "item": [
         {
           "name": "List Servers",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/catalog/servers" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/api/catalog/servers" 
+          }
         },
         {
-          "name": "Create Server",
+          "name": "Create Server (Admin Only)",
           "request": {
             "method": "POST",
             "header": [
@@ -91,9 +111,37 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"example\",\n  \"url\": \"https://upstream.example.com\",\n  \"description\": \"Example server\"\n}"
+              "raw": "{\n  \"name\": \"example-server\",\n  \"url\": \"https://upstream.example.com\",\n  \"description\": \"Example MCP server\",\n  \"access_type\": \"public\",\n  \"transport\": \"streamable-http\"\n}"
             },
             "url": "{{baseUrl}}/api/catalog/servers"
+          }
+        },
+        {
+          "name": "Update Server (Admin Only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://updated.example.com\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": "{{baseUrl}}/api/catalog/servers/{{catalog_server_id}}"
+          }
+        },
+        {
+          "name": "Refresh Server Tools (Admin Only)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/catalog/servers/{{catalog_server_id}}/refresh"
+          }
+        },
+        {
+          "name": "Get Server Tools",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/catalog/servers/{{catalog_server_id}}/tools"
           }
         }
       ]
@@ -102,10 +150,10 @@
       "name": "Tools",
       "item": [
         {
-          "name": "List (filters)",
+          "name": "List (with filters)",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/tools?hub_server_id={{hub_id}}&status=ACTIVE&q="
+            "url": "{{baseUrl}}/api/tools?server_id={{mcp_server_id}}&status=ACTIVE&q="
           }
         },
         {
@@ -141,7 +189,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "body": { "mode": "raw", "raw": "{}" },
+            "body": { 
+              "mode": "raw", 
+              "raw": "{\n  \"name\": \"My Virtual Server\"\n}" 
+            },
             "url": "{{baseUrl}}/api/virtual-servers"
           }
         },
@@ -154,14 +205,17 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tool_ids\": [\"{{tool_id}}\"]\n}"
+              "raw": "{\n  \"name\": \"My Virtual Server\",\n  \"tool_ids\": [\"{{tool_id}}\"]\n}"
             },
             "url": "{{baseUrl}}/api/virtual-servers"
           }
         },
         {
           "name": "List",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/virtual-servers" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/api/virtual-servers" 
+          }
         },
         {
           "name": "Replace Tools",
@@ -175,6 +229,13 @@
               "raw": "{\n  \"tool_ids\": [\"{{tool_id}}\"]\n}"
             },
             "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}/tools"
+          }
+        },
+        {
+          "name": "Remove Single Tool",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/virtual-servers/{{vs_id}}/tools/{{tool_id}}"
           }
         },
         {
@@ -212,7 +273,10 @@
       "item": [
         {
           "name": "List",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/hub/servers" }
+          "request": { 
+            "method": "GET", 
+            "url": "{{baseUrl}}/api/hub/servers" 
+          }
         },
         {
           "name": "Create",
@@ -223,7 +287,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"mcp_server_id\": \"{{mcp_server_id}}\",\n  \"transport\": \"streamable-http\",\n  \"auth_type\": \"bearer\",\n  \"auth_value\": \"<TOKEN_OR_JSON>\"\n}"
+              "raw": "{\n  \"mcp_server_id\": \"{{mcp_server_id}}\",\n  \"auth_type\": \"bearer\",\n  \"auth_value\": \"<TOKEN_OR_JSON>\"\n}"
             },
             "url": "{{baseUrl}}/api/hub/servers"
           }
@@ -269,12 +333,26 @@
             "header": [
               { "key": "Accept", "value": "text/event-stream" }
             ],
-            "url": "{{baseUrl}}/servers/{{vs_id}}/mcp"
+            "url": "{{baseUrl}}/servers/{{vs_id}}/mcp",
+            "auth": { "type": "noauth" }
+          }
+        },
+        {
+          "name": "Call Tool (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"tool_name\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": "{{baseUrl}}/servers/{{vs_id}}/mcp",
+            "auth": { "type": "noauth" }
           }
         }
       ]
     }
   ]
 }
-
-

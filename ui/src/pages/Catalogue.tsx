@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { notifyError, notifySuccess } from '../components/ToastHost'
 import { api, CatalogServer } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
@@ -13,10 +13,12 @@ export function Catalogue() {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
+  const [accessType, setAccessType] = useState<'public' | 'private'>('public')
   const [saving, setSaving] = useState(false)
   const [editOpen, setEditOpen] = useState<null | CatalogServer>(null)
   const [editUrl, setEditUrl] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -55,9 +57,12 @@ export function Catalogue() {
           </button>
         </div>
       </div>
-      {loading && <div className="animate-pulse text-slate-500">Loading servers...</div>}
-      {error && <div className="text-red-500">{error}</div>}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {loading ? (
+        <div className="animate-pulse text-slate-500">Loading servers...</div>
+      ) : error ? (
+        <div className="text-red-500">{error}</div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(s => (
           <div key={s.id} className="relative group rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
             <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300" style={{
@@ -66,6 +71,26 @@ export function Catalogue() {
             <div className="flex items-center justify-between">
               <div className="font-medium">{s.name}</div>
               <div className="flex items-center gap-2">
+                <button
+                  disabled={role !== 'ADMIN' || refreshingId === s.id}
+                  onClick={async () => {
+                    if (role !== 'ADMIN') return
+                    setRefreshingId(s.id)
+                    try {
+                      const result = await api.refreshCatalog(s.id)
+                      notifySuccess(`Refreshed: ${result.total_added} added, ${result.total_deleted} deleted`)
+                    } catch (e: any) {
+                      notifyError(e?.message || 'Refresh failed')
+                    } finally {
+                      setRefreshingId(null)
+                    }
+                  }}
+                  className={`text-xs px-2 py-1 rounded border border-white/10 ${role!=='ADMIN' ? 'text-slate-500 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20'} flex items-center gap-1`}
+                  title={role==='ADMIN' ? 'Refresh server tools' : 'Admin only'}
+                >
+                  <span className={`${refreshingId === s.id ? 'animate-spin' : ''}`}>⟳</span>
+                  Refresh
+                </button>
                 <button
                   disabled={role !== 'ADMIN'}
                   onClick={()=>{ setEditOpen(s); setEditUrl(s.url); setEditDesc(s.description||'') }}
@@ -82,10 +107,11 @@ export function Catalogue() {
                 <div><span className="text-slate-500">ID:</span> <code className="break-all">{s.id}</code></div>
               </div>
             </details>
-            <AddToHubButton serverId={s.id} added={hubIds.has(s.id)} onAdded={()=>setHubIds(new Set([...Array.from(hubIds), s.id]))} />
+            <AddToHubButton serverId={s.id} serverAccessType={s.access_type} added={hubIds.has(s.id)} onAdded={()=>setHubIds(new Set([...Array.from(hubIds), s.id]))} />
           </div>
         ))}
-      </div>
+        </div>
+      )}
       {/* Add catalog modal */}
       {addOpen && (
         <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -93,7 +119,7 @@ export function Catalogue() {
             <div className="p-5 md:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">Add MCP Server</div>
-                <button onClick={()=>setAddOpen(false)} className="px-2 py-1 rounded border border-white/10 hover:bg-white/10">Close</button>
+                <button onClick={()=>{setAddOpen(false); setName(''); setUrl(''); setDescription(''); setAccessType('public')}} className="px-2 py-1 rounded border border-white/10 hover:bg-white/10">Close</button>
               </div>
               <div className="grid gap-3">
                 <div className="grid gap-1">
@@ -113,19 +139,30 @@ export function Catalogue() {
                   <label className="text-xs text-slate-400">Description</label>
                   <input value={description} onChange={e=>setDescription(e.target.value)} className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40" placeholder="What this server provides" />
                 </div>
+                <div className="grid gap-1">
+                  <label className="text-xs text-slate-400">Access Type</label>
+                  <select 
+                    value={accessType} 
+                    onChange={e=>setAccessType(e.target.value as 'public' | 'private')} 
+                    className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  >
+                    <option value="public">Public - Auto-fetch tools for all users</option>
+                    <option value="private">Private - Users add with their own auth</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div className="p-4 border-t border-white/10 bg-black/20 flex justify-end gap-2">
-              <button onClick={()=>setAddOpen(false)} className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25 transition">Cancel</button>
+              <button onClick={()=>{setAddOpen(false); setName(''); setUrl(''); setDescription(''); setAccessType('public')}} className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-white/25 transition">Cancel</button>
               <button
                 disabled={saving || !name || !url || !description}
                 onClick={async()=>{
                   setSaving(true)
                   try{
-                    await api.addCatalog({ name, url: url.trim(), description })
+                    await api.addCatalog({ name, url: url.trim(), description, access_type: accessType })
                     setAddOpen(false)
-                    setName(''); setUrl(''); setDescription('')
-                    setLoading(true)
+                    setName(''); setUrl(''); setDescription(''); setAccessType('public')
+                    // Refetch the catalog without showing loading state
                     const r = await api.listCatalog();
                     setData(r.items)
                   }catch(e:any){ notifyError(e?.message||'Failed to add server') } finally { setSaving(false) }
@@ -187,6 +224,7 @@ function AddCatalogButton({ disabled, onAdded }: { disabled?: boolean; onAdded?:
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
+  const [accessType, setAccessType] = useState<'public' | 'private'>('public')
   const [saving, setSaving] = useState(false)
   if (disabled) {
     return <button disabled className="text-xs px-3 py-1.5 rounded border border-white/10 text-slate-500 cursor-not-allowed">Add</button>
@@ -202,16 +240,25 @@ function AddCatalogButton({ disabled, onAdded }: { disabled?: boolean; onAdded?:
             <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="Name" value={name} onChange={e=>setName(e.target.value)} />
             <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="URL" value={url} onChange={e=>setUrl(e.target.value)} />
             <input className="px-2 py-1 rounded border border-white/10 bg-white/5" placeholder="Description (optional)" value={description} onChange={e=>setDescription(e.target.value)} />
+            <select 
+              value={accessType} 
+              onChange={e=>setAccessType(e.target.value as 'public' | 'private')} 
+              className="px-2 py-1 rounded border border-white/10 bg-white/5 text-xs"
+            >
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
           </div>
           <div className="mt-3 flex gap-2 justify-end">
-            <button onClick={()=>setOpen(false)} className="text-xs px-3 py-1.5 rounded border border-white/10 hover:bg-white/10 hover:border-white/20">Cancel</button>
+            <button onClick={()=>{setOpen(false); setName(''); setUrl(''); setDescription(''); setAccessType('public')}} className="text-xs px-3 py-1.5 rounded border border-white/10 hover:bg-white/10 hover:border-white/20">Cancel</button>
             <button
               disabled={saving || !name || !url}
               onClick={async()=>{
                 setSaving(true)
                 try{
-                  await api.addCatalog({ name, url, description })
+                  await api.addCatalog({ name, url, description, access_type: accessType })
                   setOpen(false)
+                  setName(''); setUrl(''); setDescription(''); setAccessType('public')
                   onAdded && onAdded()
                 }catch(e:any){ notifyError(e?.message||'Failed to add server') } finally { setSaving(false) }
               }}
@@ -224,12 +271,14 @@ function AddCatalogButton({ disabled, onAdded }: { disabled?: boolean; onAdded?:
   )
 }
 
-function AddToHubButton({ serverId, added, onAdded }: { serverId: string, added?: boolean, onAdded?: ()=>void }) {
+function AddToHubButton({ serverId, serverAccessType, added, onAdded }: { serverId: string, serverAccessType?: string, added?: boolean, onAdded?: ()=>void }) {
   const [open, setOpen] = useState(false)
-  const [authType, setAuthType] = useState<'none' | 'bearer' | 'custom_headers'>('none')
+  const [authType, setAuthType] = useState<'none' | 'bearer' | 'custom_headers'>(serverAccessType === 'private' ? 'bearer' : 'none')
   const [authValue, setAuthValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const isPublic = serverAccessType === 'public'
 
   const submit = async () => {
     setSaving(true)
@@ -238,7 +287,7 @@ function AddToHubButton({ serverId, added, onAdded }: { serverId: string, added?
       let val: any = null
       if (authType === 'bearer') val = authValue
       if (authType === 'custom_headers') val = JSON.parse(authValue || '{}')
-      await api.addHub({ mcp_server_id: serverId, transport: 'streamable-http', capabilities: null, auth_type: authType, auth_value: val })
+      await api.addHub({ mcp_server_id: serverId, auth_type: authType, auth_value: val })
       setOpen(false)
       notifySuccess('Added to hub')
     } catch (e:any) {
@@ -255,23 +304,39 @@ function AddToHubButton({ serverId, added, onAdded }: { serverId: string, added?
     <div className="mt-3">
       {!open ? (
         <button
-          onClick={()=>setOpen(true)}
-          className="inline-flex items-center justify-center text-sm font-medium px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-lg shadow-emerald-900/30 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-800/40 active:scale-[0.98] transition-all duration-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          onClick={async () => {
+            if (isPublic) {
+              // For public servers, directly add with auth_type: 'none'
+              setSaving(true)
+              setError(null)
+              try {
+                await api.addHub({ mcp_server_id: serverId, auth_type: 'none', auth_value: null })
+                notifySuccess('Added to hub')
+                onAdded && onAdded()
+              } catch (e: any) {
+                notifyError(e?.message || 'Failed to add to hub')
+              } finally {
+                setSaving(false)
+              }
+            } else {
+              // For private servers, show the auth dialog
+              setOpen(true)
+            }
+          }}
+          disabled={saving}
+          className="inline-flex items-center justify-center text-sm font-medium px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-lg shadow-emerald-900/30 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-800/40 active:scale-[0.98] transition-all duration-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Add to Hub
+          {saving ? 'Adding...' : 'Add to Hub'}
         </button>
       ) : (
           <div className="border border-white/10 rounded p-3 space-y-2 bg-black/30">
           <div className="text-sm font-medium">Add to Hub</div>
             <label className="text-xs block mb-1">Auth Type</label>
           <select value={authType} onChange={e=>setAuthType(e.target.value as any)} className="border border-white/10 rounded px-2 py-1 bg-black/30 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-            <option value="none">None</option>
             <option value="bearer">Bearer Token</option>
             <option value="custom_headers">Custom Headers (JSON)</option>
           </select>
-          {(authType === 'bearer' || authType === 'custom_headers') && (
-            <textarea value={authValue} onChange={e=>setAuthValue(e.target.value)} placeholder={authType==='bearer' ? 'token' : '{"X-Api-Key":"..."}'} className="border border-white/10 rounded p-2 w-full bg-black/30" rows={3} />
-          )}
+          <textarea value={authValue} onChange={e=>setAuthValue(e.target.value)} placeholder={authType==='bearer' ? 'token' : '{"X-Api-Key":"..."}'} className="border border-white/10 rounded p-2 w-full bg-black/30" rows={3} />
           {error && <div className="text-xs text-red-500">{error}</div>}
           <div className="flex gap-3">
             <button

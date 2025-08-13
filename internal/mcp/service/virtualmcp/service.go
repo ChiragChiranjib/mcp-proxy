@@ -78,11 +78,28 @@ func (s *Service) ListForUser(
 	return rows, nil
 }
 
+// GetByID retrieves a virtual server by ID.
+func (s *Service) GetByID(ctx context.Context, id string) (m.MCPVirtualServer, error) {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	return s.repo.GetVirtualServerByID(ctx, id)
+}
+
 // SetStatus updates virtual server status.
 func (s *Service) SetStatus(ctx context.Context, id string, status string) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	return s.repo.UpdateVirtualServerStatus(ctx, id, status)
+}
+
+// UpdateName updates virtual server name.
+func (s *Service) UpdateName(ctx context.Context, id string, name *string) error {
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	if name == nil {
+		return nil // No update needed
+	}
+	return s.repo.UpdateVirtualServerName(ctx, id, *name)
 }
 
 // ReplaceTools replaces tool set for a virtual server (capped at 50).

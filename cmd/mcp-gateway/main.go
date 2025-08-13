@@ -20,8 +20,9 @@ import (
 	logpkg "github.com/ChiragChiranjib/mcp-proxy/internal/log"
 	mrepo "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/repo"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog"
+	catalogOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/catalog_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub"
-	orchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
+	mcphubOrchestrator "github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/mcphub_orchestrator"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/tool"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/user"
 	"github.com/ChiragChiranjib/mcp-proxy/internal/mcp/service/virtualmcp"
@@ -86,8 +87,9 @@ func main() {
 			encr = e
 		}
 	}
-	// Wire orchestrator: use concrete MCP client via adapter
-	orch := orchestrator.New(hubSvc, toolSvc, grepo, logger, encr)
+	// Wire orchestrators: use concrete MCP client via adapter
+	orch := mcphubOrchestrator.New(hubSvc, toolSvc, grepo, logger, encr)
+	catalogOrch := catalogOrchestrator.New(catalogSvc, toolSvc, grepo, logger, encr)
 
 	server := mcpserver.New(
 		mcpserver.DefaultConfig(),
@@ -99,7 +101,8 @@ func main() {
 		mcpserver.WithUserService(userSvc),
 		mcpserver.WithEncrypter(encr),
 		mcpserver.WithAppConfig(cfg),
-		mcpserver.WithOrchestrator(orch),
+		mcpserver.WithMcphubOrchestrator(orch),
+		mcpserver.WithCatalogOrchestrator(catalogOrch),
 	)
 
 	srv := &http.Server{

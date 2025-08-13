@@ -35,10 +35,7 @@ setup: migrate-up seed run
 # Up: migrate up, seed, and start server in background
 up:
 	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/migrate -dir migrations up
-	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/seed -only servers
 	APP_ENV=dev MCP_MODE=streamable-http go run ./cmd/seed -only users
-	APP_ENV=dev MCP_MODE=streamable-http nohup go run ./cmd/mcp-gateway > server.out 2>&1 & echo $$! > server.pid
-	@echo "Server started with PID `cat server.pid`"
 
 # Stop: stop background server if running
 stop:

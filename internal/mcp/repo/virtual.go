@@ -22,6 +22,16 @@ func (r *Repo) ListVirtualServersForUser(
 	return rows, err
 }
 
+// GetVirtualServerByID ...
+func (r *Repo) GetVirtualServerByID(
+	ctx context.Context, id string) (m.MCPVirtualServer, error) {
+	var vs m.MCPVirtualServer
+	err := r.WithContext(ctx).
+		Where("id = ?", id).
+		First(&vs).Error
+	return vs, err
+}
+
 // UpdateVirtualServerStatus ...
 func (r *Repo) UpdateVirtualServerStatus(
 	ctx context.Context, id, status string) error {
@@ -29,6 +39,15 @@ func (r *Repo) UpdateVirtualServerStatus(
 		Table("mcp_virtual_servers").
 		Where("id = ?", id).
 		Update("status", status).Error
+}
+
+// UpdateVirtualServerName ...
+func (r *Repo) UpdateVirtualServerName(
+	ctx context.Context, id, name string) error {
+	return r.WithContext(ctx).
+		Table("mcp_virtual_servers").
+		Where("id = ?", id).
+		Update("name", name).Error
 }
 
 // ReplaceVirtualServerTools ...

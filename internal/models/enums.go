@@ -19,6 +19,14 @@ const (
 	AuthTypeCustomHeaders AuthType = "custom_headers"
 )
 
+// AccessType represents server access patterns for tools.
+type AccessType string
+
+const (
+	AccessTypePublic  AccessType = "public"  // Global tools, no auth required
+	AccessTypePrivate AccessType = "private" // User-specific tools, auth required
+)
+
 // Role represents application user roles.
 type Role string
 
